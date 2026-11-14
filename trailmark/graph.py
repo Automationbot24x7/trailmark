@@ -105,10 +105,11 @@ def statements(path: Path) -> list[str]:
 
 
 @contextmanager
-def open_store(path: Path = STORE):
+def open_store(path: Path = STORE, read_only: bool = False):
     """Short-lived connection: Relate allows one process per store, so the CLI,
-    the agent server and scripts each open, work, and close."""
-    db = relate.connect(str(path))
+    the agent server and scripts each open, work, and close. Reads pass
+    read_only=True so looking at the books never rewrites the file."""
+    db = relate.connect(str(path), read_only=read_only)
     try:
         yield db
     finally:

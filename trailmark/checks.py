@@ -44,7 +44,7 @@ def scan(db=None) -> list[dict]:
         return out
     if db is not None:
         return go(db)
-    with open_store() as db:
+    with open_store(read_only=True) as db:
         return go(db)
 
 
@@ -86,7 +86,7 @@ def explain(invoice_id: str, db=None) -> dict | None:
                 "nodes": t["nodes"], "rels": [r for r in t["rels"] if r]}
     if db is not None:
         return go(db)
-    with open_store() as db:
+    with open_store(read_only=True) as db:
         return go(db)
 
 
