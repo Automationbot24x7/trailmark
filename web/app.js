@@ -69,7 +69,11 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const nice = (iso) => { const [y, m, d] = iso.split('-'); return `${+d} ${MONTHS[+m - 1]} ${y}`; };
 const ID_RE = /\b(INV-\d+|PO-\d+|GRN-\d+|PAY-\d+|BL-\d+|BA-\d+|BC-\d+|G2B-\d+|E-\d{2}|V-\d{3})\b/g;
 function rich(text) {
-  return esc(text).replace(/Rs (\d+)/g, (_, n) => inr(n)).replace(ID_RE, (m) => `<span class="chip" data-id="${m}">${m}</span>`);
+  return esc(text)
+    .replace(/Rs (\d+)/g, (_, n) => inr(n))
+    .replace(/(^|[\s(])(\d{4,})(?=[\s,.)]|$)/g, (_, pre, n) => pre + Number(n).toLocaleString('en-IN'))
+    .replace(/\b(20\d\d-\d\d-\d\d)\b/g, (_, d) => nice(d))
+    .replace(ID_RE, (m) => `<span class="chip" data-id="${m}">${m}</span>`);
 }
 function wrapWords(t, n) { const out = []; let cur = ''; for (const w of t.split(' ')) { if ((cur + ' ' + w).trim().length > n && cur) { out.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); } if (cur) out.push(cur); return out; }
 const trunc = (s, n) => (s = String(s ?? ''), s.length > n ? s.slice(0, n - 1) + '…' : s);
@@ -125,7 +129,7 @@ function lines(n) {
     case 'Payment': return [inr(p.amount), `${nice(p.date)} · UTR …${String(p.utr).slice(-6)}`];
     case 'BankLine': return [`${p.direction} ${inr(p.amount)}`, `${nice(p.date)} · ${p.narration.includes('RETURN') ? 'RETURN · A/C CLOSED' : 'NEFT ' + p.utr.slice(-6)}`];
     case 'GstrLine': return [`${p.vendor_inv_no} · tax ${inr(p.tax)}`, `period ${p.period}`];
-    case 'BankAccount': return [p.bank, `··${p.last4}${n.vendorSince ? ` · vendor's, added ${nice(n.vendorSince).slice(0, -5)}` : ''}`];
+    case 'BankAccount': return [p.bank, n.vendorSince ? `··${p.last4} · vendor's since ${MONTHS[+n.vendorSince.slice(5, 7) - 1]} ${n.vendorSince.slice(2, 4)}` : `··${p.last4}`];
     case 'BankChange': return [p.reason, nice(p.date)];
     case 'Employee': return [p.name, p.role];
   }
@@ -373,8 +377,8 @@ function renderSide(ex) {
   } else {
     side.innerHTML = tabs + `<div class="console">
       <div class="presets">${PRESETS.map(([n], i) => `<button class="preset" data-preset="${i}">${esc(n)}</button>`).join('')}</div>
-      <textarea id="cq" spellcheck="false">${esc(S.lastQuery || PRESETS[0][1])}</textarea>
-      <div class="run-row"><button class="btn" id="runq">Run</button><span id="qmeta">Read-only is up to you here: this is an in-memory copy in your tab.</span></div>
+      <textarea id="cq" spellcheck="false" wrap="off" aria-label="Cypher query">${esc(S.lastQuery || PRESETS[0][1])}</textarea>
+      <div class="run-row"><button class="btn" id="runq">Run</button><span id="qmeta">Runs on the in-memory copy in this tab · Ctrl+Enter to run · reload to reset</span></div>
       <div id="qres"></div></div>`;
     runConsole();
   }
@@ -430,6 +434,10 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#runq')) return runConsole();
   if (e.target.closest('[data-reset]')) return reset();
 });
+document.getElementById('how-open').addEventListener('click', () => document.getElementById('how').showModal());
+document.getElementById('how').addEventListener('click', (e) => {
+  if (e.target.closest('[data-close]') || e.target.id === 'how') document.getElementById('how').close();
+});
 document.addEventListener('keydown', (e) => { if (e.target.id === 'cq' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runConsole(); });
 document.addEventListener('mouseover', (e) => {
   const c = e.target.closest('.chip'); if (!c) return;
@@ -453,7 +461,7 @@ async function boot() {
     scan();
     const n = graph.nodes.reduce((a, g) => a + g.rows.length, 0), r = graph.rels.reduce((a, g) => a + g.rows.length, 0);
     eng.classList.add('ready');
-    eng.innerHTML = `<span class="pulse"></span>Relate 1.0.1 · WebAssembly · <b>${n}</b> nodes · <b>${r}</b> relationships · rebuilt in ${Math.round(performance.now() - t1)} ms`;
+    eng.innerHTML = `<span class="pulse"></span>Relate 1.0.1 · WebAssembly · <b>${n}</b> nodes · <b>${r}</b> rels · built in ${Math.round(performance.now() - t1)} ms`;
     select(location.hash.slice(1) || 'INV-1042');
   } catch (err) {
     console.error(err);

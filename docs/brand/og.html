@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; background: #f6f4ef; color: #141414; font-family: 'Inter Tight', sans-serif; }
+  .wrap { position: absolute; inset: 0; padding: 56px 64px; box-sizing: border-box; }
+  .brand { display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 30px; letter-spacing: -.02em; }
+  .brand svg { width: 52px; height: 34px; }
+  h1 { margin: 34px 0 0; font-size: 72px; font-weight: 800; letter-spacing: -.035em; line-height: 1.02; max-width: 980px; }
+  p { margin: 18px 0 0; font-size: 25px; line-height: 1.4; color: #3b3a37; max-width: 900px; }
+  .trail { position: absolute; left: 64px; right: 64px; bottom: 74px; height: 70px; }
+  .foot { position: absolute; left: 64px; right: 64px; bottom: 30px; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #75716a; letter-spacing: .02em; border-top: 1.5px solid #141414; padding-top: 12px; }
+  .foot b { color: #141414; font-weight: 600; }
+  .k { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; fill: #75716a; }
+  .i { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 600; fill: #141414; }
+</style></head>
+<body><div class="wrap">
+  <div class="brand"><svg viewBox="0 0 40 24"><path d="M3 19 L13 7 L23 13" stroke="#141414" stroke-width="2.4" fill="none"/><path d="M23 13 L35 4" stroke="#c7341f" stroke-width="2.4" stroke-dasharray="3.2 2.6" fill="none"/><circle cx="3" cy="19" r="2.9" fill="#141414"/><circle cx="13" cy="7" r="2.9" fill="#141414"/><circle cx="23" cy="13" r="2.9" fill="#141414"/><circle cx="35" cy="4" r="2.9" fill="#f6f4ef" stroke="#c7341f" stroke-width="1.6"/></svg>Trailmark</div>
+  <h1>Why doesn’t this invoice reconcile?</h1>
+  <p>Follow the accounts-payable trail as a graph and land on the exact link that broke, with the path that proves it.</p>
+  <svg class="trail" viewBox="0 0 1072 70">
+    <g><rect x="0" y="6" width="176" height="58" fill="#fffdf9" stroke="#141414" stroke-width="1.6"/><text class="k" x="14" y="27">Purchase order</text><text class="i" x="14" y="50">PO-7713</text></g>
+    <path d="M176 35 L222 35" stroke="#c7341f" stroke-width="3" stroke-dasharray="7 5"/>
+    <g><rect x="224" y="6" width="176" height="58" fill="#f9ddd7" stroke="#c7341f" stroke-width="2.2" stroke-dasharray="6 4"/><text class="k" x="238" y="27" style="fill:#c7341f">Expected · not found</text><text class="i" x="238" y="50" style="fill:#c7341f">goods receipt</text></g>
+    <path d="M400 35 L446 35" stroke="#a6a198" stroke-width="1.6"/>
+    <g><rect x="448" y="6" width="176" height="58" fill="#fffdf9" stroke="#141414" stroke-width="2.4"/><text class="k" x="462" y="27">Invoice</text><text class="i" x="462" y="50">INV-1042</text></g>
+    <path d="M624 35 L670 35" stroke="#a6a198" stroke-width="1.6"/>
+    <g><rect x="672" y="6" width="176" height="58" fill="#fffdf9" stroke="#cfc9bd"/><text class="k" x="686" y="27">Payment</text><text class="i" x="686" y="50" style="fill:#a6a198">not due yet</text></g>
+    <path d="M848 35 L894 35" stroke="#a6a198" stroke-width="1.6"/>
+    <g><rect x="896" y="6" width="176" height="58" fill="#fffdf9" stroke="#cfc9bd"/><text class="k" x="910" y="27">Bank statement</text><text class="i" x="910" y="50" style="fill:#a6a198">—</text></g>
+  </svg>
+  <div class="foot"><span><b>Relate</b> graph · runs in your browser (WebAssembly) · Python · MCP</span><span>Sample data</span></div>
+</div></body></html>

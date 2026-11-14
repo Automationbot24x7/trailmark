@@ -12,7 +12,7 @@ RETURN 'gst-not-filed' AS check,
        'GST credit Rs ' + toString(i.gst) + ' at risk' AS headline,
        'We claimed Rs ' + toString(i.gst) + ' input tax credit on ' + i.id + ' (' + v.name + ' ' + i.vendor_inv_no + ', ' + i.date +
        '), but the supplier never reported it in GSTR-2B. ' +
-       CASE WHEN size(filed) > 0 THEN 'They did report ' + toString(size(filed)) + ' other invoice(s) to us, so this one was skipped. '
+       CASE WHEN size(filed) > 0 THEN 'They did report ' + toString(size(filed)) + CASE WHEN size(filed) = 1 THEN ' other invoice' ELSE ' other invoices' END + ' to us, so this one was skipped. '
             ELSE 'They have not reported any invoice to us. ' END +
        CASE WHEN size(payments) > 0 THEN 'The invoice is already paid (' + payments[0] + '), so ask the supplier to file or hold the credit.'
             ELSE 'Hold the payment until they file.' END AS detail,
