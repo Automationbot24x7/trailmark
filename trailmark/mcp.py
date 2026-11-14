@@ -27,7 +27,7 @@ Flow: (:PurchaseOrder)-[:PLACED_WITH]->(:Vendor); (:GoodsReceipt)-[:RECEIVED_AGA
 (:Payment)-[:SETTLES {amount}]->(:Invoice)  (one payment may settle many invoices);
 (:BankLine)-[:CLEARS]->(:Payment)  (one payment may leave the bank as several debits);
 (:BankLine)-[:REVERSES]->(:BankLine)  (a returned debit);
-(:GstrLine)-[:REPORTS]->(:Invoice)  (supplier's GSTR-2B filing);
+(:GstrLine)-[:REPORTS]->(:Invoice)  (a line in our GSTR-2B, i.e. the supplier reported the invoice in their GSTR-1);
 (:Payment)-[:PAID_TO]->(:BankAccount)<-[:HAS_ACCOUNT {since}]-(:Vendor|:Employee);
 (:Employee)-[:APPROVED]->(:Payment|:BankChange); (:Employee)-[:ENTERED]->(:BankChange);
 (:BankChange)-[:FOR_VENDOR|NEW_ACCOUNT|OLD_ACCOUNT]->(...).
@@ -72,7 +72,7 @@ def _clean(obj):
 def _finding(f):
     return {"invoice": f["invoice"], "check": f["check"], "title": f["title"], "severity": f["severity"],
             "headline": rupees_in_text(f["headline"]), "detail": rupees_in_text(f["detail"]),
-            "amount_at_risk": f["amount"], "evidence_path": f["path"], "expected_but_missing": f.get("missing"),
+            "amount_at_risk": f["amount"], "evidence_nodes": f["path"], "expected_but_missing": f.get("missing"),
             "suggested_fix": f.get("suggestion"), "cypher": f["query_file"]}
 
 

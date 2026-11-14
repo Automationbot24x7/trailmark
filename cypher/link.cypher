@@ -27,7 +27,7 @@ MATCH (r:BankLine {direction: 'credit'}), (b:BankLine {direction: 'debit'})
 WHERE r.utr = b.utr AND r.amount = b.amount AND r.narration CONTAINS 'RETURN'
 CREATE (r)-[:REVERSES]->(b)
 ;
-// GSTR-2B: the supplier's filing reports our invoice when GSTIN and invoice number agree
+// GSTR-2B (our statement, built from suppliers' GSTR-1 filings) reports our invoice when GSTIN and invoice number agree
 MATCH (l:GstrLine) MATCH (v:Vendor {gstin: l.supplier_gstin})<-[:ISSUED_BY]-(i:Invoice)
 WHERE i.norm_no = l.norm_no
 CREATE (l)-[:REPORTS]->(i)

@@ -202,7 +202,7 @@ for row in CLEAN:
 # Missing receipt that is really a keying error. The goods arrived, but stores
 # keyed the receipt against PO-7731 (does not exist) instead of PO-7713.
 p1 = po("V-103", "2026-10-06", "MS angle bracket 50x50", 400, 210, pid="PO-7713")
-grn("PO-7731", "V-103", "2026-10-15", "MS angle bracket 50x50", 400, gid="GRN-5520")
+grn("PO-7731", "V-103", "2026-10-15", "MS angle brkt 50 x 50 mm", 400, gid="GRN-5520")
 i1 = invoice("INV-1042", "V-103", "SSF/1042", "PO-7713", "2026-10-20", 400, 210)
 g2b("V-103", i1)
 

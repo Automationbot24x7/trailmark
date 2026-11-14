@@ -6,8 +6,9 @@ WHERE a.id < b.id AND a.norm_no = b.norm_no AND a.total = b.total
 OPTIONAL MATCH (b)-[:BILLS]->(po:PurchaseOrder)<-[:BILLS]-(a)
 OPTIONAL MATCH (pa:Payment)-[:SETTLES]->(a)
 OPTIONAL MATCH (pb:Payment)-[:SETTLES]->(b)
+OPTIONAL MATCH (la:BankLine)-[:CLEARS]->(pa)
 OPTIONAL MATCH (lb:BankLine)-[:CLEARS]->(pb)
-WITH a, b, v, po, collect(DISTINCT pa) AS pas, collect(DISTINCT pb) AS pbs, collect(DISTINCT lb) AS lbs
+WITH a, b, v, po, collect(DISTINCT pa) AS pas, collect(DISTINCT pb) AS pbs, collect(DISTINCT la) AS las, collect(DISTINCT lb) AS lbs
 RETURN 'duplicate-invoice' AS check,
        CASE WHEN size(pas) > 0 AND size(pbs) > 0 THEN 'high' ELSE 'medium' END AS severity,
        b.id AS invoice,
@@ -16,9 +17,9 @@ RETURN 'duplicate-invoice' AS check,
        v.name + ' invoice for Rs ' + toString(a.total) +
        CASE WHEN po IS NULL THEN '' ELSE ' against ' + po.id END + '. ' +
        CASE WHEN size(pas) > 0 AND size(pbs) > 0
-         THEN 'It was paid twice: ' + pas[0].id + ' and ' + pbs[0].id + '. Recover Rs ' + toString(b.total) + ' from the vendor.'
+         THEN 'It was paid twice: ' + pas[0].id + CASE WHEN size(las) > 0 THEN ' (' + las[0].id + ')' ELSE '' END + ' and ' + pbs[0].id + CASE WHEN size(lbs) > 0 THEN ' (' + lbs[0].id + ')' ELSE '' END + '. Recover Rs ' + toString(b.total) + ' from the vendor.'
          ELSE 'Block the second copy before it is paid.' END AS detail,
        CASE WHEN size(pbs) > 0 THEN b.total ELSE 0 END AS amount,
-       [a.id] + [p IN pas | p.id] + CASE WHEN po IS NULL THEN [] ELSE [po.id] END + [b.id] + [p IN pbs | p.id] + [l IN lbs | l.id] AS path,
+       [a.id] + [p IN pas | p.id] + [l IN las | l.id] + CASE WHEN po IS NULL THEN [] ELSE [po.id] END + [b.id] + [p IN pbs | p.id] + [l IN lbs | l.id] AS path,
        null AS missing,
        null AS suggestion

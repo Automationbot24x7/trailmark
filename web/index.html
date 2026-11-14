@@ -69,7 +69,7 @@
   <form method="dialog" class="how-x"><button aria-label="Close">Close</button></form>
   <h2 id="how-h">How Trailmark works</h2>
   <ol>
-    <li><b>The books become a graph.</b> Thirteen sample ledgers (purchase orders, goods receipts, invoices, payments, bank statement lines, the supplier's GSTR-2B) are linked by the keys an accountant uses: PO number, bank reference (UTR), GSTIN and invoice number. 184 nodes, 265 relationships.</li>
+    <li><b>The books become a graph.</b> Thirteen sample ledgers (purchase orders, goods receipts, invoices, payments, bank statement lines, our GSTR-2B) are linked by the keys an accountant uses: PO number, bank reference (UTR), GSTIN and invoice number. 184 nodes, 265 relationships.</li>
     <li><b>Six checks walk each trail.</b> Every check is a plain Cypher file. A <span class="k-brk">dashed red</span> link is one the trail expects but cannot find; an <span class="k-sug">amber</span> one is a fix the graph can see; a <span class="k-ok">green</span> one is a fix you made.</li>
     <li><b>It runs in this tab.</b> Relate, compiled to WebAssembly, rebuilds the graph from <code>store/trailmark.rl</code> and runs the same Cypher the command line and the AI-agent server run. There is no server: what you do here stays in your browser.</li>
   </ol>

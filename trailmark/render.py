@@ -12,7 +12,7 @@ STAGES = [
     ("Invoice", "Invoice"),
     ("Payment", "Payment"),
     ("BankLine", "Bank statement"),
-    ("GstrLine", "GSTR-2B"),
+    ("GstrLine", "Our GSTR-2B"),
     ("BankAccount", "Paid to account"),
     ("BankChange", "Bank detail change"),
     ("Employee", "People"),
@@ -59,7 +59,8 @@ def inr(n) -> str:
 
 
 def rupees_in_text(text: str) -> str:
-    return re.sub(r"Rs (\d+)", lambda m: inr(m.group(1)), text or "")
+    text = re.sub(r"Rs (\d+)", lambda m: inr(m.group(1)), text or "")
+    return re.sub(r"(^|[\s(])(\d{4,})(?=[\s,.)]|$)", lambda m: m.group(1) + f"{int(m.group(2)):,}", text)
 
 
 def node_line(n: dict) -> str:

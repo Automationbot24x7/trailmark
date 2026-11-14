@@ -1,8 +1,8 @@
 # Trailmark
 
-**Why doesn't this invoice reconcile?** Trailmark follows an invoice through the accounts-payable trail (purchase order, goods receipt, invoice, payment, bank line, the supplier's GST return) as a [Relate](https://github.com/relatedb/relate) graph. It points at the exact link that is broken and shows the path that proves it.
+**Why doesn't this invoice reconcile?** Trailmark follows an invoice through the accounts-payable trail (purchase order, goods receipt, invoice, payment, bank line, our GSTR-2B) as a [Relate](https://github.com/relatedb/relate) graph. It points at the exact link that is broken and shows the path that proves it.
 
-[**Live demo**](https://automationbot24x7.github.io/trailmark/) (runs in your browser, nothing to install) · [Demo video](#demo-video) · Python, CLI and AI-agent tools below
+[**Live demo**](https://automationbot24x7.github.io/trailmark/) (runs in your browser, nothing to install) · Python, CLI and AI-agent tools below
 
 ![Trailmark showing invoice INV-1042: the goods-receipt link is missing, and a receipt keyed against a non-existent PO is suggested as the fix](docs/shot-INV-1042.png)
 
@@ -16,11 +16,11 @@ The trail is a graph, and the hard breaks are only visible when you can walk it:
 
 | # | Break | What the graph has to do | Sample |
 |---|---|---|---|
-| 1 | **Invoice has no goods receipt**, but the receipt exists, keyed against a PO number that does not exist | find the gap on `Invoice → PO ← Receipt`, then find the orphan receipt by **vector search** over item text, filtered to the same vendor, and check quantity | `INV-1042` |
+| 1 | **Invoice has no goods receipt**, but the receipt exists, keyed against a PO number that does not exist | find the gap on `Invoice → PO ← Receipt`, then **vector search** over receipt item text (same vendor) for lookalikes, and let the graph reject the ones already received against another PO or with a different quantity | `INV-1042` |
 | 2 | **Billed more than was received** | sum **many receipts and many invoices** that meet at one PO | `INV-1038` |
 | 3 | **Marked paid, but the money came back** | one payment settles **three invoices**, leaves the bank as **two debits**, and one debit is **reversed**. The reversal chain is a quantified path pattern | `INV-1036` |
 | 4 | **Same invoice paid twice** | two invoice nodes with one vendor, one normalised number (`BOS/889` = `BOS-889`) and one PO, each with its own payment and bank line | `INV-1040` |
-| 5 | **Tax credit claimed, supplier never filed** | an invoice with no `REPORTS` link from the supplier's GSTR-2B, while the same supplier's other invoices have one | `INV-1041` |
+| 5 | **Tax credit claimed, supplier never filed** | an invoice with no `REPORTS` link from a line of our GSTR-2B (the supplier never put it in their GSTR-1), while the same supplier's other invoices have one | `INV-1041` |
 | 6 | **Large payment to a just-changed bank account that belongs to an employee** | every 1-3 hop path from the payment to any employee, over five relationship types: who **approved** the payment, who **entered** the new bank details, who **owns** the receiving account | `INV-1037` |
 
 The other 20 invoices reconcile, so the checks are quiet when nothing is wrong. The six findings put ₹12,89,516 at risk.
@@ -47,6 +47,8 @@ flowchart LR
 
 184 nodes and 265 relationships. The builder infers the links from flat CSV ledgers using the keys an accountant would use: PO number, bank reference (UTR), GSTIN plus invoice number. See [`cypher/link.cypher`](cypher/link.cypher). A receipt counts against a PO only if the PO number it was keyed with exists, which is how scenario 1 arises.
 
+Item descriptions on purchase orders and receipts also carry a small text vector (`item_vec`): hashed character trigrams, 64 numbers, computed in [`trailmark/graph.py`](trailmark/graph.py) with no model and no network. It is enough to see that stores' "MS angle brkt 50 x 50 mm" is the PO's "MS angle bracket 50x50" (similarity 0.80), while an identical description (1.00) on a receipt already received against another PO is ruled out by the graph.
+
 ## How it uses Relate
 
 - **Mode: single file**, `store/trailmark.rl`.
@@ -60,7 +62,7 @@ Relate features this project leans on:
 | Embedded Python library, no server | [`trailmark/graph.py`](trailmark/graph.py) builds and opens the store in-process |
 | Single-file `.rl` store, `read_only` opens | `store/trailmark.rl`; every read in the CLI and agent server |
 | Uniqueness constraints, vector index | [`cypher/schema.cypher`](cypher/schema.cypher) |
-| `SEARCH … VECTOR INDEX … WHERE` inside an `OPTIONAL CALL` subquery | [check 1](cypher/checks/1_missing_receipt.cypher), which suggests the receipt that belongs to the PO |
+| `SEARCH … VECTOR INDEX … WHERE … SCORE AS` inside an `OPTIONAL CALL` subquery, then graph filters | [check 1](cypher/checks/1_missing_receipt.cypher): vector search proposes, the graph disposes |
 | Quantified path patterns `((…)-[…]-(…)){1,3}` | [check 3](cypher/checks/3_payment_returned.cypher), [check 6](cypher/checks/6_new_bank_account.cypher), [the trail](cypher/trail.cypher) |
 | `EXISTS {}` subqueries, list comprehension, `reduce`, `duration.inDays` | all [checks](cypher/checks/) |
 | WebAssembly build in the browser | [`web/`](web/): the page rebuilds the graph in the tab and runs the **same `.cypher` files** |
@@ -128,6 +130,8 @@ python -m trailmark build                                                       
 
 Other commands: `python -m trailmark cypher "MATCH (v:Vendor) RETURN v.name"` (read-only query), `python -m trailmark export` (refresh the browser copy), `python -m unittest -v` (seven end-to-end tests).
 
+**Your own ledgers:** replace the CSVs in `data/sample/` with your own exports, keeping the column headers, then run `python -m trailmark build`. Each file's columns are listed in its header row; `data/generate_sample.py` shows how the sample was made.
+
 ### With the Relate CLI
 
 The store is a plain Relate database. With the [Relate CLI](https://github.com/relatedb/relate/releases/latest) installed:
@@ -144,11 +148,35 @@ That returns `["E-06","BA-8865","V-108"]`: the AP clerk's salary account is the 
 
 | Tool | What it does |
 |---|---|
-| `scan_exceptions` | every finding, with plain-English detail, amount at risk, evidence path and suggested fix |
+| `scan_exceptions` | every finding, with plain-English detail, amount at risk, evidence nodes and suggested fix |
 | `explain_invoice` | one invoice's status, findings and trail (nodes with one-line summaries, relationships) |
 | `link_receipt` | the one write: links an unlinked receipt to a same-vendor PO, recording `linked_by`, `note` and `was_keyed_as` |
 | `read_cypher` | read-only Cypher, at most 100 rows plus a `truncated` flag |
 | `get_schema` | labels, relationship types and what they mean in accounts-payable terms |
+
+A real `link_receipt` call (run on a copy of the store) and what came back:
+
+```json
+{"name": "link_receipt",
+ "arguments": {"grn_id": "GRN-5520", "po_id": "PO-7713",
+               "note": "Stores keyed PO-7731; same vendor, item and quantity as PO-7713"}}
+```
+
+```json
+{
+  "ok": true,
+  "grn": "GRN-5520",
+  "po": "PO-7713",
+  "was_keyed_as": "PO-7731",
+  "linked_by": "agent (mcp)",
+  "invoices_now": [{"invoice": "INV-1042", "status": "matched", "remaining_findings": []}],
+  "undo": "python -m trailmark build  (rebuilds the store from the sample CSVs)"
+}
+```
+
+In the browser the same fix is one button, and the trail turns green:
+
+![INV-1042 after linking GRN-5520 to PO-7713: status Matched, the receipt card and its link in green, ₹99,120 less at risk](docs/shot-fixed.png)
 
 [`.mcp.json`](.mcp.json) registers it (run your agent from the repo folder with the virtual environment active), alongside Relate's own `relate serve --mcp stdio --read-only` for raw access. [`AGENTS.md`](AGENTS.md) has the instructions and the questions used in the demo. Running `relate skill install` also teaches coding agents Relate's Cypher dialect.
 
@@ -199,10 +227,6 @@ data/             sample ledgers and their generator
 store/            the Relate store
 tests/            end-to-end tests (standard library only)
 ```
-
-## Demo video
-
-Coming soon.
 
 ## Credits and disclosure
 

@@ -88,7 +88,7 @@ function renderLedger() {
   $('#tally').innerHTML = `
     <div class="t-exc"><b>${n('exception')}</b><span>exceptions</span></div>
     <div class="t-ok"><b>${n('reconciled')}</b><span>reconciled</span></div>
-    <div><b>${n('matched')}</b><span>matched, not yet due</span></div>`;
+    <div><b>${n('matched')}</b><span>matched</span></div>`;
   const groups = [['exception', 'Exceptions'], ['matched', 'Matched, not yet due'], ['overdue', 'Overdue'], ['reconciled', 'Reconciled']];
   let html = '';
   for (const [st, name] of groups) {
@@ -98,14 +98,14 @@ function renderLedger() {
       const order = S.findings.map((f) => f.invoice);
       list = list.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     }
-    html += `<div class="group-h"><span>${name}</span><span>${list.length}</span></div>`;
+    html += `<div class="group-h"><span>${name} · ${list.length}</span><span>${st === 'exception' ? 'at risk' : 'invoice'}</span></div>`;
     for (const i of list) {
       const f = S.findings.find((x) => x.invoice === i.id);
       html += `<button class="row${S.sel === i.id ? ' sel' : ''}" data-inv="${i.id}">
-        <span class="dot ${st}"></span>
+        <span class="dot ${st}${f ? ' ' + f.severity : ''}" title="${f ? f.severity + ' severity' : st}"></span>
         <span class="who"><span class="id">${i.id}</span><span class="v">${esc(i.vendor)}</span>
         ${f ? `<span class="why">${rich(f.headline).replace(/<[^>]+>/g, '')}</span>` : ''}</span>
-        <span class="amt">${inr(i.total)}</span></button>`;
+        <span class="amt">${inr(f ? f.amount : i.total)}</span></button>`;
     }
   }
   $('#list').innerHTML = html;
@@ -116,8 +116,8 @@ const LANES = [['Vendor', 'Vendor'], ['PurchaseOrder', 'Purchase order'], ['Good
 const SLOT = { Vendor: [0, 0], PurchaseOrder: [1, 0], GoodsReceipt: [2, 0], Invoice: [3, 0], Payment: [4, 0], BankLine: [5, 0],
   GstrLine: [3, 1], BankAccount: [4, 1], BankChange: [5, 1], Employee: [5, 2] };
 const KIND = { Vendor: 'Vendor', PurchaseOrder: 'Purchase order', GoodsReceipt: 'Goods receipt', Invoice: 'Invoice', Payment: 'Payment',
-  BankLine: 'Bank line', GstrLine: "Supplier's GSTR-2B", BankAccount: 'Paid to account', BankChange: 'Bank detail change', Employee: 'Employee' };
-const W = 172, H = 74, GX = 56, PADX = 22, TOP = 72, VG = 14, BAND = 52;
+  BankLine: 'Bank line', GstrLine: 'Our GSTR-2B', BankAccount: 'Paid to account', BankChange: 'Bank detail change', Employee: 'Employee' };
+const W = 172, H = 74, GX = 56, PADX = 22, TOP = 72, VG = 14, BAND = 52, RIGHT = 74;
 
 function lines(n) {
   const p = n.props;
@@ -154,19 +154,27 @@ function layout(ex) {
     const key = s.join(',');
     (bySlot[key] ||= []).push(it);
   }
-  // order inside a slot: ghost, then the focus/evidence nodes, then the rest by id
-  for (const k in bySlot) bySlot[k].sort((a, b) => (b.ghost ? 1 : 0) - (a.ghost ? 1 : 0) || (a.id === ex.inv.id ? -1 : b.id === ex.inv.id ? 1 : 0) || (ev.has(b.id) - ev.has(a.id)) || a.id.localeCompare(b.id));
   const rowsUsed = [0, 1, 2].filter((r) => Object.keys(bySlot).some((k) => +k.split(',')[1] === r));
   const rowH = {};
   for (const r of [0, 1, 2]) rowH[r] = Math.max(1, ...Object.entries(bySlot).filter(([k]) => +k.split(',')[1] === r).map(([, v]) => v.length)) * (H + VG) - VG;
   const rowY = {}; let y = TOP;
   for (const r of [0, 1, 2]) { rowY[r] = y; if (rowsUsed.includes(r)) y += rowH[r] + BAND; else if (r === 0) y += H + BAND; }
+  // place lane by lane; inside a lane: the ghost, then the focus invoice, then by the average height of
+  // already-placed neighbours (so lines don't cross), then evidence first, then id
   const pos = {};
-  for (const [k, list] of Object.entries(bySlot)) {
+  const keys = Object.keys(bySlot).sort((p, q) => p.split(',')[0] - q.split(',')[0] || p.split(',')[1] - q.split(',')[1]);
+  const bary = (it) => {
+    const ys = ex.rels.filter((e) => e.from === it.id || e.to === it.id).map((e) => pos[e.from === it.id ? e.to : e.from]).filter(Boolean).map((p) => p.y);
+    return ys.length ? ys.reduce((s, v) => s + v, 0) / ys.length : 1e9;
+  };
+  for (const k of keys) {
     const [c, r] = k.split(',').map(Number);
+    const list = bySlot[k];
+    const b = Object.fromEntries(list.map((it) => [it.id, bary(it)]));
+    list.sort((p, q) => (q.ghost ? 1 : 0) - (p.ghost ? 1 : 0) || (p.id === ex.inv.id ? -1 : q.id === ex.inv.id ? 1 : 0) || (b[p.id] - b[q.id]) || (ev.has(q.id) - ev.has(p.id)) || p.id.localeCompare(q.id));
     list.forEach((it, idx) => { pos[it.id] = { x: PADX + c * (W + GX), y: rowY[r] + idx * (H + VG), it }; });
   }
-  const width = PADX * 2 + 6 * W + 5 * GX;
+  const width = PADX * 2 + 6 * W + 5 * GX + RIGHT;
   return { pos, ev, high, sugg, ghosts, height: y - BAND + 26, width, rowY, rowsUsed };
 }
 
@@ -177,12 +185,12 @@ function edgePath(a, b) {
     const top = ay < by ? a : b, bot = ay < by ? b : a;
     if (bot.y - top.y <= H + VG + 1) { // stacked neighbours: arc on the right
       const x = top.x + W, y1 = top.y + H / 2, y2 = bot.y + H / 2;
-      return { d: `M${x} ${y1} C${x + 26} ${y1}, ${x + 26} ${y2}, ${x} ${y2}`, mx: x + 20, my: (y1 + y2) / 2, anchor: 'start', rev: ay > by };
+      return { d: `M${x} ${y1} C${x + 26} ${y1}, ${x + 26} ${y2}, ${x} ${y2}`, mx: x + 24, my: (y1 + y2) / 2, anchor: 'start', rev: ay > by };
     }
     const between = Object.values(LAST.pos).some((q) => Math.abs(q.x - top.x) < 1 && q.y > top.y + 1 && q.y < bot.y - 1);
     if (between) { // cards in the way: swing out into the left gutter
       const x = top.x, y1 = bot.y + H / 2, y2 = top.y + H / 2;
-      return { d: `M${x} ${y1} C${x - 30} ${y1}, ${x - 30} ${y2}, ${x} ${y2}`, mx: x - 24, my: (y1 + y2) / 2, anchor: 'end', rev: ay < by };
+      return { d: `M${x} ${y1} C${x - 30} ${y1}, ${x - 30} ${y2}, ${x} ${y2}`, mx: x - GX / 2, my: (y1 + y2) / 2, anchor: 'middle', rev: ay < by };
     }
     const x = top.x + W / 2, y1 = top.y + H, y2 = bot.y;
     return { d: `M${x} ${y1} L${x} ${y2}`, mx: x + 6, my: (y1 + y2) / 2 + 3, anchor: 'start', rev: ay > by };
@@ -198,6 +206,13 @@ function edgePath(a, b) {
 }
 
 let LAST = { pos: {} };
+// fit a line in a card: as is, gently condensed (up to 25%), or cut
+function fit(cls, x, y, s, n) {
+  s = String(s ?? '');
+  if (s.length <= n) return `<text class="${cls}" x="${x}" y="${y}">${esc(s)}</text>`;
+  const t = s.length <= Math.round(n * 1.25) ? s : trunc(s, Math.round(n * 1.25));
+  return `<text class="${cls}" x="${x}" y="${y}" textLength="${W - 24}" lengthAdjust="spacingAndGlyphs">${esc(t)}</text>`;
+}
 function renderTrail(ex, animate) {
   const L = layout(ex);
   LAST = L;
@@ -221,9 +236,14 @@ function renderTrail(ex, animate) {
   const edge = (a, b, cls, label, delay) => {
     const p = edgePath(a, b); if (!p) return;
     const len = 400;
-    edges += `<path class="edge ${cls}${animate ? ' draw' : ''}" d="${p.d}" style="--len:${len};animation-delay:${delay}ms" marker-end="url(#arr-${cls.includes('brk') ? 'r' : cls.includes('sug') ? 'a' : cls.includes('fixed') ? 'g' : cls.includes('high') ? 'r' : 'k'})"/>`;
-    const parts = !p.arc && label.length > 11 && label.includes('_') ? [label.slice(0, label.indexOf('_') + 1), label.slice(label.indexOf('_') + 1)] : [label];
-    labels += `<text class="elabel ${cls}" x="${p.mx}" y="${p.my - (parts.length - 1) * 5}" text-anchor="${p.anchor}">${parts.map((t, i) => `<tspan x="${p.mx}" dy="${i ? 10 : 0}">${esc(t)}</tspan>`).join('')}</text>`;
+    const mk = `url(#arr-${cls.includes('brk') ? 'r' : cls.includes('sug') ? 'a' : cls.includes('fixed') ? 'g' : cls.includes('high') ? 'r' : 'k'})`;
+    edges += `<path class="edge ${cls}${animate ? ' draw' : ''}" d="${p.d}" style="--len:${len};animation-delay:${delay}ms" ${p.rev ? 'marker-start' : 'marker-end'}="${mk}"><title>${esc(label || '')}</title></path>`;
+    if (!label) return;
+    const parts = !p.arc && label.length > 8 && label.includes('_') ? [label.slice(0, label.indexOf('_') + 1), label.slice(label.indexOf('_') + 1)] : [label];
+    const cw = 5.5, lw = Math.max(...parts.map((t) => t.length)) * cw + 8, lh = parts.length * 10 + 4;
+    const lx = p.anchor === 'middle' ? p.mx - lw / 2 : p.anchor === 'end' ? p.mx - lw + 4 : p.mx - 4;
+    const top = p.my - (parts.length - 1) * 5 - 9;
+    labels += `<g class="elab ${cls}"><rect x="${lx}" y="${top}" width="${lw}" height="${lh}"/><text class="elabel ${cls}" x="${p.mx}" y="${top + 9}" text-anchor="${p.anchor}">${parts.map((t, i) => `<tspan x="${p.mx}" dy="${i ? 10 : 0}">${esc(t)}</tspan>`).join('')}</text></g>`;
   };
   // relationships (drawn from source to target; arrows show the stored direction)
   const colOf = (id) => (L.pos[id] ? L.pos[id].x : 0);
@@ -235,15 +255,15 @@ function renderTrail(ex, animate) {
     const ev = L.ev.has(r.from) && L.ev.has(r.to);
     const cls = isFix ? 'fixed' : ev ? `ev${L.high ? ' high' : ''}` : '';
     const delay = animate ? 120 + (Math.min(colOf(r.from), colOf(r.to)) / (W + GX)) * 90 : 0;
-    edge(a, b, cls, isFix ? 'RECEIVED_AGAINST · linked' : r.type, delay);
+    edge(a, b, cls, r.type, delay);
   }
   for (const g of L.ghosts) {
     const a = L.pos[g.after], b = L.pos[g.id];
-    if (a && b) edge(b, a, 'brk', 'missing', 0);
+    if (a && b) edge(b, a, 'brk', '', 0);
   }
   for (const s of L.sugg) {
     const a = L.pos[s.grn], b = L.pos[s.po];
-    if (a && b) edge(a, b, 'sug', 'suggested link', 0);
+    if (a && b) edge(a, b, 'sug', '', 0);
   }
   // cards
   for (const { x, y, it } of Object.values(L.pos)) {
@@ -261,13 +281,13 @@ function renderTrail(ex, animate) {
     const isFixed = S.linked.has(it.id);
     const ev = L.ev.has(it.id);
     const cls = ['card', isFixed ? 'fixed' : isCand ? 'cand' : '', ev && !isFixed ? 'ev' : '', ev && L.high ? 'high' : '', it.id === ex.inv.id ? 'focus' : '', animate ? 'appear' : ''].join(' ');
-    const kind = isCand ? 'Candidate · unlinked receipt' : isFixed ? 'Goods receipt · linked' : KIND[it.label];
+    const kind = isCand ? 'Candidate receipt' : isFixed ? 'Receipt · linked now' : KIND[it.label];
     cards += `<g class="${cls}" style="animation-delay:${delay}ms" data-id="${it.id}">
       <rect class="box" x="${x}" y="${y}" width="${W}" height="${H}"/>
       <text class="k" x="${x + 12}" y="${y + 18}">${esc(kind)}</text>
       <text class="i" x="${x + 12}" y="${y + 37}">${esc(it.id)}</text>
-      <text class="l1" x="${x + 12}" y="${y + 54}">${esc(trunc(l1, 23))}</text>
-      <text class="l2" x="${x + 12}" y="${y + 68}">${esc(trunc(l2, 25))}</text>
+      ${fit('l1', x + 12, y + 54, l1, 23)}
+      ${fit('l2', x + 12, y + 68, l2, 26)}
       ${ev && !isFixed ? `<rect class="flag" x="${x + W - 10}" y="${y}" width="10" height="10"/>` : ''}</g>`;
   }
   const marker = (id, color) => `<marker id="arr-${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="${color}"/></marker>`;
@@ -297,7 +317,7 @@ function renderStage(animate = true) {
   let findingsHtml = '';
   if (!ex.findings.length) {
     const msg = ex.status === 'reconciled'
-      ? ['Every link holds.', 'Ordered, received, billed, paid, cleared by the bank and reported by the supplier in GSTR-2B.']
+      ? ['Every link holds.', 'Ordered, received, billed, paid, cleared by the bank, and reported by the supplier so it shows in our GSTR-2B.']
       : ['Matched. Nothing is broken.', `Ordered, received and billed agree. Due ${nice(inv.due)}, so no payment is expected yet.`];
     findingsHtml = `<div class="ok-note"><b>${msg[0]}</b>${msg[1]}</div>`;
     const fixed = [...S.linked.entries()].find(([, v]) => v.invoice === inv.id);
@@ -308,9 +328,9 @@ function renderStage(animate = true) {
       <div class="f-top"><span class="sev ${f.severity}">${f.severity.toUpperCase()}</span><span class="f-title">${esc(f.title)}</span><span class="f-amt">${inr(f.amount)}</span></div>
       <h3 class="f-head">${rich(f.headline)}</h3>
       <p class="f-detail">${rich(f.detail)}</p>
-      <div class="f-path"><span class="lbl">Evidence path</span>${(f.path || []).map((id) => `<span class="chip" data-id="${id}">${id}</span>`).join('<span class="arr">→</span>')}</div>
+      <div class="f-path"><span class="lbl">Evidence</span>${(f.path || []).map((id) => `<span class="chip" data-id="${id}">${id}</span>`).join('<span class="arr">·</span>')}</div>
       ${f.suggestion ? `<div class="fix"><div><p><b>Suggested fix:</b> ${rich(f.suggestion.text)}</p>
-        <small>Found by vector search over receipt item text (similarity ${f.suggestion.similarity}), kept only because the receipt is unlinked, from the same vendor, with the same quantity.</small></div>
+        <small>Vector search over receipt text from the same vendor scored it ${Number(f.suggestion.similarity).toFixed(2)}${(f.suggestion.rejected || []).length ? `; the graph ruled out ${f.suggestion.rejected.map(esc).join('; ')}` : ''}. The link is written to the graph in this tab only; reload to undo.</small></div>
         <button class="btn" data-link="${f.suggestion.grn}|${f.suggestion.po}">Link ${f.suggestion.grn}</button></div>` : ''}
     </article>`;
   }
@@ -372,7 +392,7 @@ function renderSide(ex) {
     const files = ex.findings.length ? [...new Set(ex.findings.map((f) => f.file))].map((f) => S.Q.checks.find((c) => c.file === f)) : [S.Q.trail];
     side.innerHTML = tabs + files.map((c) => `
       <p class="q-why">${esc(c.graph || c.plain)}</p>
-      <div class="q-file"><span>${c.file}</span><span>ran in ${fmtMs(S.timings[c.file] ?? S.timings.trail)} · Relate WebAssembly</span></div>
+      <div class="q-file"><span>${c.file}</span><span>${fmtMs(S.timings[c.file] ?? S.timings.trail)} in your browser</span></div>
       <pre class="cy">${highlight(c.text.split('\n').filter((l) => !/^\/\/\s*(title|plain|graph):/.test(l)).join('\n'))}</pre>`).join('<div style="height:18px"></div>');
   } else {
     side.innerHTML = tabs + `<div class="console">
@@ -463,6 +483,8 @@ async function boot() {
     eng.classList.add('ready');
     eng.innerHTML = `<span class="pulse"></span>Relate 1.0.1 · WebAssembly · <b>${n}</b> nodes · <b>${r}</b> rels · built in ${Math.round(performance.now() - t1)} ms`;
     select(location.hash.slice(1) || 'INV-1042');
+    const ap = new URLSearchParams(location.search).get('apply');
+    if (ap) { const [g, p] = ap.split(','); linkReceipt(g, p); }
   } catch (err) {
     console.error(err);
     eng.classList.add('fail');
