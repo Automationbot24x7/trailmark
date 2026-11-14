@@ -35,7 +35,7 @@ Every node has an `id`. Amounts are whole rupees. Dates are ISO strings (use dat
 
 TOOLS = [
     {"name": "scan_exceptions",
-     "description": "Run every reconciliation check over the AP graph. Returns totals and each finding: invoice, check, severity, plain-English detail, amount at risk, the evidence path (node ids) and, when the graph can see one, a suggested fix.",
+     "description": "Run every reconciliation check over the AP graph. Returns totals and each finding: invoice, check, severity, plain-English detail, amount at risk, the evidence nodes (ids) and, when the graph can see one, a suggested fix.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
     {"name": "explain_invoice",
      "description": "Why does this invoice (not) reconcile? Returns its status, the findings, and its trail: vendor, PO, receipts, payments, bank lines, GSTR-2B lines, beneficiary account and any people the evidence touches, as nodes with one-line summaries and the relationships between them.",
@@ -148,7 +148,7 @@ def handle(msg):
     if method == "initialize":
         ver = (msg.get("params") or {}).get("protocolVersion", "2025-06-18")
         result = {"protocolVersion": ver, "capabilities": {"tools": {}}, "serverInfo": SERVER,
-                  "instructions": "Start with scan_exceptions or explain_invoice. Quote the evidence path. "
+                  "instructions": "Start with scan_exceptions or explain_invoice. Quote the evidence nodes. "
                                   "Ask the user before link_receipt. All data is invented sample data."}
     elif method == "ping":
         result = {}

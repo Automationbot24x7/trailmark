@@ -22,7 +22,11 @@ STAGE_ORDER = {k: i for i, (k, _) in enumerate(STAGES)}
 
 
 def _enable_ansi() -> bool:
-    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    if not sys.stdout.isatty():
         return False
     if os.name == "nt":
         os.system("")  # turns on VT processing in the Windows console

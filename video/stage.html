@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trailmark demo stage</title>
+<!-- The demo video is one continuous take of this page: the live app in an iframe, a camera that
+     moves over it, a terminal window with real recorded command output, and captions.
+     video/record.mjs steps Chrome's virtual time one frame at a time and captures each frame. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #141414; --paper: #f6f4ef; --red: #c7341f; --green: #2c7a4b; --amber: #a8650b; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--paper); font-family: 'Inter Tight', sans-serif; }
+  #cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; will-change: transform; }
+  #app { position: absolute; left: 0; top: 0; width: 1440px; height: 810px; border: 0; transform: scale(1.333334); transform-origin: 0 0; background: var(--paper); }
+  #cursor { position: absolute; left: 0; top: 0; width: 26px; height: 26px; pointer-events: none; z-index: 5; }
+  #ring { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border: 3px solid var(--ink); border-radius: 50%; opacity: 0; z-index: 4; }
+  #dim { position: absolute; inset: 0; background: rgba(20, 20, 20, .38); opacity: 0; }
+  #term { position: absolute; left: 160px; top: 70px; width: 1600px; height: 800px; background: #121212; color: #e7e3da; box-shadow: 0 30px 80px rgba(0,0,0,.35); transform: translateY(1150px); font-family: 'JetBrains Mono', monospace; font-variant-ligatures: none; }
+  #term .bar { height: 42px; display: flex; align-items: center; padding: 0 22px; border-bottom: 1px solid #2a2a2a; font-size: 15px; color: #9a958b; letter-spacing: .02em; }
+  #term .bar b { color: #e7e3da; font-weight: 600; margin-right: 12px; }
+  #screen { position: absolute; left: 0; right: 0; top: 42px; bottom: 0; padding: 22px 30px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+  #screen pre { margin: 0; font: 500 19px/1.5 'JetBrains Mono', monospace; white-space: pre; font-variant-ligatures: none; }
+  .p { color: #8fd3b6; } .c { color: #f6f4ef; font-weight: 600; } .cm { color: #8a857c; }
+  .a1 { font-weight: 700; } .a2 { color: #8a857c; } .a31 { color: #ef6f5c; } .a32 { color: #6fcf97; } .a33 { color: #f0b85a; }
+  .j { color: #b9c8f0; } .k { color: #f0c674; } .ok { color: #6fcf97; }
+  .caret { display: inline-block; width: 11px; height: 22px; background: #e7e3da; vertical-align: -4px; }
+  #cap { position: absolute; left: 72px; bottom: 54px; max-width: 1480px; background: var(--ink); color: #fff; padding: 20px 30px 22px; font: 600 33px/1.32 'Inter Tight', sans-serif; letter-spacing: -.01em; opacity: 0; transform: translateY(12px); z-index: 10; border-left: 6px solid var(--red); }
+  #cap.ok { border-left-color: var(--green); }
+  #cap small { display: block; font: 500 17px/1.4 'JetBrains Mono', monospace; color: #b8b3a8; letter-spacing: .02em; margin-bottom: 6px; text-transform: uppercase; }
+  #end { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 160px; background: var(--paper); opacity: 0; z-index: 20; }
+  #end .brand { display: flex; align-items: center; gap: 18px; font-weight: 800; font-size: 44px; letter-spacing: -.02em; }
+  #end h1 { margin: 34px 0 0; font-size: 86px; font-weight: 800; letter-spacing: -.035em; line-height: 1.02; max-width: 1400px; }
+  #end p { margin: 26px 0 0; font-size: 30px; color: #3b3a37; max-width: 1400px; line-height: 1.4; }
+  #end .links { margin-top: 44px; padding-top: 22px; border-top: 2px solid var(--ink); font: 500 26px/1.6 'JetBrains Mono', monospace; }
+  #end .links span { color: #75716a; }
+</style>
+</head>
+<body>
+<div id="cam">
+  <iframe id="app" src="/web/#INV-1042"></iframe>
+  <div id="ring"></div>
+  <svg id="cursor" viewBox="0 0 26 26"><path d="M3 2 L3 21 L8.5 16 L12.5 24.5 L16 23 L12 14.8 L19.5 14.8 Z" fill="#141414" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+</div>
+<div id="dim"></div>
+<div id="term"><div class="bar"><b>Terminal</b>C:\trailmark</div><div id="screen"><pre id="out"></pre></div></div>
+<div id="cap"></div>
+<div id="end">
+  <div class="brand"><svg viewBox="0 0 40 24" width="64" height="40"><path d="M3 19 L13 7 L23 13" stroke="#141414" stroke-width="2.4" fill="none"/><path d="M23 13 L35 4" stroke="#c7341f" stroke-width="2.4" stroke-dasharray="3.2 2.6" fill="none"/><circle cx="3" cy="19" r="2.9" fill="#141414"/><circle cx="13" cy="7" r="2.9" fill="#141414"/><circle cx="23" cy="13" r="2.9" fill="#141414"/><circle cx="35" cy="4" r="2.9" fill="#f6f4ef" stroke="#c7341f" stroke-width="1.6"/></svg>Trailmark</div>
+  <h1>Why doesn’t this invoice reconcile?</h1>
+  <p>Accounts payable as a Relate graph: one file, the same Cypher in the browser, the command line and an AI agent’s tools. Open source. All data in this video is invented sample data.</p>
+  <div class="links">github.com/Automationbot24x7/trailmark<br><span>live demo:</span> automationbot24x7.github.io/trailmark</div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const app = $('#app'), cam = $('#cam'), cursor = $('#cursor'), ring = $('#ring');
+const K = 1920 / 1440;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const ease = (t) => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+async function tween(ms, fn) {
+  const t0 = performance.now();
+  for (;;) { const t = Math.min(1, (performance.now() - t0) / ms); fn(ease(t), t); if (t >= 1) break; await sleep(16); }
+}
+const A = () => app.contentWindow, D = () => app.contentDocument;
+
+// ---- camera: shows the region (x, y) with zoom s; the bottom 170 px stay clear for captions
+const C = { x: 0, y: 0, s: 1 };
+const setCam = () => { cam.style.transform = `scale(${C.s}) translate(${-C.x}px, ${-C.y}px)`; };
+function target(r, pad = 40, maxS = 2.1) {
+  const vh = 1080 - 170;
+  let s = Math.min(1920 / (r.w + 2 * pad), vh / (r.h + 2 * pad), maxS); s = Math.max(1, s);
+  let x = r.x + r.w / 2 - 1920 / s / 2, y = r.y + r.h / 2 - vh / s / 2;
+  x = Math.max(0, Math.min(1920 - 1920 / s, x)); y = Math.max(0, Math.min(1080 - 1080 / s, y));
+  return { x, y, s };
+}
+async function camTo(t, ms = 1400) { const f = { ...C }; await tween(ms, (e) => { C.x = f.x + (t.x - f.x) * e; C.y = f.y + (t.y - f.y) * e; C.s = f.s + (t.s - f.s) * e; setCam(); }); }
+function rectOf(sel, idx = 0) {
+  const el = typeof sel === 'string' ? D().querySelectorAll(sel)[idx] : sel;
+  const b = el.getBoundingClientRect();
+  return { x: b.left * K, y: b.top * K, w: b.width * K, h: b.height * K, el };
+}
+const union = (...rs) => { const x = Math.min(...rs.map((r) => r.x)), y = Math.min(...rs.map((r) => r.y)); return { x, y, w: Math.max(...rs.map((r) => r.x + r.w)) - x, h: Math.max(...rs.map((r) => r.y + r.h)) - y }; };
+async function scrollApp(to, ms = 900) { const from = A().scrollY; await tween(ms, (e) => A().scrollTo(0, from + (to - from) * e)); }
+async function scrollInto(sel, top = 80) { const el = D().querySelector(sel); const y = el.getBoundingClientRect().top + A().scrollY - top; await scrollApp(Math.max(0, y)); }
+
+// ---- cursor
+const P = { x: 1500, y: 1180 };
+const setCur = () => { cursor.style.transform = `translate(${P.x}px, ${P.y}px)`; };
+async function moveTo(x, y, ms = 900) { const f = { ...P }; await tween(ms, (e) => { P.x = f.x + (x - f.x) * e; P.y = f.y + (y - f.y) * e; setCur(); }); }
+async function clickEl(sel, idx = 0) {
+  const r = rectOf(sel, idx);
+  await moveTo(r.x + Math.min(r.w * .5, 160), r.y + r.h * .5);
+  ring.style.left = P.x + 'px'; ring.style.top = P.y + 'px';
+  tween(380, (e, t) => { ring.style.opacity = String(1 - t); ring.style.transform = `scale(${.5 + t})`; });
+  await sleep(120);
+  r.el.click();
+}
+
+// ---- captions
+async function cap(text, kicker = '', tone = '') {
+  const c = $('#cap');
+  if (c.style.opacity !== '0' && c.style.opacity !== '') await tween(260, (e) => { c.style.opacity = String(1 - e); });
+  c.className = tone; c.innerHTML = (kicker ? `<small>${kicker}</small>` : '') + text;
+  await tween(320, (e) => { c.style.opacity = String(e); c.style.transform = `translateY(${12 * (1 - e)}px)`; });
+}
+async function capOff() { const c = $('#cap'); await tween(260, (e) => { c.style.opacity = String(1 - e); }); }
+
+// ---- terminal (real recorded output, see video/capture/)
+const out = $('#out'); let lines = [];
+const show = (caret) => { out.innerHTML = lines.slice(-29).join('\n') + (caret ? '<span class="caret"></span>' : ''); };
+async function typeCmd(cmd, note = '') {
+  lines.push(''); const i = lines.length - 1;
+  for (let k = 1; k <= cmd.length; k++) { lines[i] = `<span class="p">$</span> <span class="c">${esc(cmd.slice(0, k))}</span>`; show(true); await sleep(28); }
+  if (note) { lines[i] += `  <span class="cm">${esc(note)}</span>`; }
+  show(false); await sleep(350);
+}
+async function print(htmlLines, gap = 30) { for (const l of htmlLines) { lines.push(l); show(false); await sleep(gap); } }
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+function ansi(text) {
+  return text.split('\n').map((line) => {
+    let html = '', open = 0;
+    for (const part of line.split(/\x1b\[(\d+)m/)) { /* alternate text / code */ }
+    const re = /\x1b\[(\d+)m/g; let last = 0, m;
+    while ((m = re.exec(line))) { html += esc(line.slice(last, m.index)); last = re.lastIndex; if (m[1] === '0') { html += '</span>'.repeat(open); open = 0; } else { html += `<span class="a${m[1]}">`; open++; } }
+    return html + esc(line.slice(last)) + '</span>'.repeat(open);
+  });
+}
+async function termIn() { const t = $('#term'), d = $('#dim'); await tween(900, (e) => { t.style.transform = `translateY(${1150 * (1 - e)}px)`; d.style.opacity = String(e); }); }
+async function termOut() { const t = $('#term'), d = $('#dim'); await tween(800, (e) => { t.style.transform = `translateY(${1150 * e}px)`; d.style.opacity = String(1 - e); }); }
+
+// ---- readiness: the app's engine has loaded and fonts are in
+window.stageReady = false;
+(async () => {
+  await document.fonts.ready;
+  for (;;) { try { if (D().querySelector('#engine.ready') && D().querySelector('svg.trail')) break; } catch {} await sleep(200); }
+  await A().document.fonts.ready;
+  window.CAPTURE = { scan: await (await fetch('capture/scan.ansi')).text(), mcp: await (await fetch('capture/mcp.jsonl')).text(), relate: await (await fetch('capture/relate.txt')).text() };
+  setCam(); setCur();
+  await sleep(2500);
+  window.stageReady = true;
+})();
+
+window.timelineDone = false;
+window.startTimeline = async () => {
+  const sel = (inv) => { A().location.hash = inv; };
+  // 1. The question
+  await cap('Month-end. 26 invoices, six don’t reconcile, and the reason is never on one ledger.', 'Sample books · all data invented');
+  await sleep(4200);
+  // 2. The graph
+  await camTo(target(union(rectOf('.books'), rectOf('.row', 3)), 30, 2.0), 1300);
+  await cap('Trailmark links POs, receipts, invoices, payments, bank lines and our GSTR-2B into one graph, and puts the money at risk first.');
+  await sleep(3600);
+  await camTo(target(union(rectOf('#engine'), rectOf('.sample-tag')), 40, 2.2), 1200);
+  await cap('The graph engine is Relate, compiled to WebAssembly and running in this browser tab: 184 nodes, 265 relationships.', 'Relate · embedded');
+  await sleep(3800);
+  // 3. INV-1042: the missing link
+  await camTo(target(rectOf('.trail-wrap'), 20, 1.6), 1300);
+  await cap('INV-1042 bills PO-7713, but nothing was received against it. The dashed red card is the link the trail expects and cannot find.', 'Invoice has no goods receipt');
+  await sleep(5200);
+  await scrollInto('.finding', 20);
+  await camTo(target(rectOf('.finding'), 24, 1.7), 1100);
+  await cap('Vector search finds lookalike receipts; the graph rules out the one already received against another PO. GRN-5520 was keyed to PO-7731, which doesn’t exist.');
+  await sleep(6500);
+  await clickEl('[data-link]');
+  await sleep(500);
+  await scrollApp(0, 700);
+  await camTo(target(union(rectOf('.inv-head'), rectOf('.trail-wrap')), 20, 1.5), 1100);
+  await cap('One click links it. The trail holds: matched, and ₹99,120 comes off the at-risk total.', 'Fixed', 'ok');
+  await sleep(4200);
+  // 4. INV-1037: the employee's account
+  await camTo({ x: 0, y: 0, s: 1 }, 900);
+  await clickEl('[data-inv="INV-1037"]');
+  await sleep(900);
+  await camTo(target(rectOf('.trail-wrap'), 20, 1.6), 1200);
+  await cap('INV-1037: ₹8,90,000 paid to a bank account the vendor switched to six days earlier.', 'Large payment to a just-changed account');
+  await sleep(4000);
+  const t = rectOf('.trail-wrap');
+  await camTo(target({ x: t.x + t.w * .52, y: t.y + t.h * .45, w: t.w * .48, h: t.h * .55 }, 20, 2.0), 1200);
+  await cap('Every 1–3 hop path from the payment to our people: the same AP clerk entered the new bank details, approved the payment, and owns the account.');
+  await sleep(7200);
+  // 5. INV-1036: money came back
+  await camTo({ x: 0, y: 0, s: 1 }, 900);
+  await clickEl('[data-inv="INV-1036"]');
+  await sleep(900);
+  await camTo(target(rectOf('.trail-wrap'), 20, 1.6), 1200);
+  await cap('INV-1036: one payment, three invoices, two bank debits, and one came back. The books still say paid.', 'Payment returned by the bank');
+  await sleep(5600);
+  // 6. The Cypher
+  await capOff();
+  await scrollInto('.cols', 10);
+  await camTo(target(rectOf('#side'), 20, 1.7), 1100);
+  await cap('Every check is a plain Cypher file: quantified path patterns, vector SEARCH, subqueries. The same files run here, in the CLI and for agents.', 'How the graph found it');
+  await sleep(5200);
+  await clickEl('[data-tab="ask"]');
+  await sleep(700);
+  await camTo(target(rectOf('#side'), 20, 1.7), 900);
+  await clickEl('#runq');
+  await cap('Ask your own questions. This one walks from a payment to every person connected to it.');
+  await sleep(4600);
+  // 7. Terminal: CLI, MCP, Relate CLI
+  await capOff();
+  await scrollApp(0, 600);
+  await camTo({ x: 0, y: 0, s: 1 }, 700);
+  await termIn();
+  await cap('The same graph from the command line. The books are one file: store/trailmark.rl.', 'Python · Relate embedded');
+  await typeCmd('python -m trailmark scan');
+  await print(ansi(window.CAPTURE.scan).filter((l, i, a) => !(l === '' && i === a.length - 1)), 45);
+  await sleep(3200);
+  await cap('For AI agents, an MCP server: five tools, read-only by default, and one guarded write that records who linked what, and why.', 'Any MCP agent');
+  await typeCmd('python -m trailmark mcp', '# tool server for AI agents (stdio)');
+  const resp = JSON.parse(JSON.parse(window.CAPTURE.mcp.trim().split('\n').pop()).result.content[0].text);
+  await print([
+    '<span class="k">→ tools/call</span> <span class="c">link_receipt</span>',
+    `  <span class="j">{"grn_id": "GRN-5520", "po_id": "PO-7713",</span>`,
+    `  <span class="j"> "note": "Stores keyed PO-7731; same vendor, item and quantity as PO-7713"}</span>`,
+  ], 260);
+  await sleep(700);
+  await print([
+    `<span class="k">← result</span>  <span class="ok">{"ok": ${resp.ok}, "was_keyed_as": "${resp.was_keyed_as}", "linked_by": "${resp.linked_by}",</span>`,
+    `<span class="ok">   "invoices_now": [{"invoice": "${resp.invoices_now[0].invoice}", "status": "${resp.invoices_now[0].status}"}]}</span>`,
+  ], 260);
+  await sleep(4600);
+  await cap('Relate’s own CLI reads the same file, and the agent’s fix is on disk.', 'relate CLI');
+  await typeCmd("relate --read-only -d store/trailmark.rl \"MATCH (g:GoodsReceipt {id:'GRN-5520'})-[r:RECEIVED_AGAINST]->(po) RETURN ...\"");
+  await print(window.CAPTURE.relate.trim().split('\n').map((l) => `<span class="c">${esc(l)}</span>`), 90);
+  await sleep(4400);
+  await capOff();
+  await termOut();
+  // 8. Close
+  const end = $('#end');
+  await tween(900, (e) => { end.style.opacity = String(e); });
+  await sleep(6000);
+  window.timelineDone = true;
+};
+</script>
+</body>
+</html>

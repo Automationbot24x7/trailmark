@@ -15,7 +15,7 @@ If you have no MCP host, the same answers are available from the shell:
 ## How to answer
 
 1. Start with `scan_exceptions`, or `explain_invoice` for a named invoice.
-2. Quote the **evidence path** (node ids) and the amount at risk. Explain in plain words; the user is an accountant, not a graph person.
+2. Quote the **evidence nodes** (ids) and the amount at risk. Explain in plain words; the user is an accountant, not a graph person.
 3. When a finding carries a `suggested_fix`, describe it and **ask before calling `link_receipt`**. It is the only write, and it records `linked_by`, `note` and `was_keyed_as`.
 4. For anything the checks do not cover, call `get_schema` and then `read_cypher`. Dates are ISO strings: use `date(x)` and `duration.inDays(a, b).days`. Amounts are whole rupees.
 5. To undo every change, run `python -m trailmark build`.

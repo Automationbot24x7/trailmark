@@ -1,0 +1,20 @@
+
+  [1mTrailmark[0m  accounts payable as of 2026-10-31   [2mSAMPLE DATA - all names and numbers are invented[0m
+  ──────────────────────────────────────────────────────────────────────────────
+  26 invoices   [32m16 reconciled[0m   4 matched, not yet due   [31m6 exceptions[0m   ₹12,89,516 at risk
+  ──────────────────────────────────────────────────────────────────────────────
+  [31m●[0m [1mINV-1037[0m Large payment to a just-changed bank account    ₹8,90,000
+      [2mPaid to an employee's account[0m
+  [31m●[0m [1mINV-1036[0m Payment came back from the bank                 ₹1,95,600
+      [2mMarked paid, ₹1,95,600 came back[0m
+  [31m●[0m [1mINV-1040[0m Same invoice paid twice                           ₹56,640
+      [2mDuplicate of INV-1039, both paid[0m
+  [31m●[0m [1mINV-1038[0m Billed more than was received                      ₹4,956
+      [2mBilled 1,000, received 900[0m
+  [33m●[0m [1mINV-1042[0m Invoice has no goods receipt                      ₹99,120
+      [2mNo goods receipt for PO-7713[0m
+  [33m●[0m [1mINV-1041[0m Tax credit claimed, supplier never filed          ₹43,200
+      [2mGST credit ₹43,200 at risk[0m
+
+[2m  Explain one:  python -m trailmark explain INV-1042[0m
+
