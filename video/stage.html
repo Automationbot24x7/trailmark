@@ -11,8 +11,8 @@
   :root { --ink: #141414; --paper: #f6f4ef; --red: #c7341f; --green: #2c7a4b; --amber: #a8650b; }
   html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--paper); font-family: 'Inter Tight', sans-serif; }
   #cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; will-change: transform; }
-  #app { position: absolute; left: 0; top: 0; width: 1440px; height: 810px; border: 0; transform: scale(1.333334); transform-origin: 0 0; background: var(--paper); }
-  #cursor { position: absolute; left: 0; top: 0; width: 26px; height: 26px; pointer-events: none; z-index: 5; }
+  #app { position: absolute; left: 0; top: 0; width: 1440px; height: 1700px; border: 0; transform: scale(1.333334); transform-origin: 0 0; background: var(--paper); }
+  #cursor { position: absolute; will-change: transform; left: 0; top: 0; width: 26px; height: 26px; pointer-events: none; z-index: 5; }
   #ring { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border: 3px solid var(--ink); border-radius: 50%; opacity: 0; z-index: 4; }
   #dim { position: absolute; inset: 0; background: rgba(20, 20, 20, .38); opacity: 0; }
   #term { position: absolute; left: 160px; top: 70px; width: 1600px; height: 800px; background: #121212; color: #e7e3da; box-shadow: 0 30px 80px rgba(0,0,0,.35); transform: translateY(1150px); font-family: 'JetBrains Mono', monospace; font-variant-ligatures: none; }
@@ -24,7 +24,7 @@
   .a1 { font-weight: 700; } .a2 { color: #8a857c; } .a31 { color: #ef6f5c; } .a32 { color: #6fcf97; } .a33 { color: #f0b85a; }
   .j { color: #b9c8f0; } .k { color: #f0c674; } .ok { color: #6fcf97; }
   .caret { display: inline-block; width: 11px; height: 22px; background: #e7e3da; vertical-align: -4px; }
-  #cap { position: absolute; left: 72px; bottom: 54px; max-width: 1480px; background: var(--ink); color: #fff; padding: 20px 30px 22px; font: 600 33px/1.32 'Inter Tight', sans-serif; letter-spacing: -.01em; opacity: 0; transform: translateY(12px); z-index: 10; border-left: 6px solid var(--red); }
+  #cap { position: absolute; will-change: opacity, transform; left: 72px; bottom: 54px; max-width: 1480px; background: var(--ink); color: #fff; padding: 20px 30px 22px; font: 600 33px/1.32 'Inter Tight', sans-serif; letter-spacing: -.01em; opacity: 0; transform: translateY(12px); z-index: 10; border-left: 6px solid var(--red); }
   #cap.ok { border-left-color: var(--green); }
   #cap small { display: block; font: 500 17px/1.4 'JetBrains Mono', monospace; color: #b8b3a8; letter-spacing: .02em; margin-bottom: 6px; text-transform: uppercase; }
   #end { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 160px; background: var(--paper); opacity: 0; z-index: 20; }
@@ -62,35 +62,43 @@ async function tween(ms, fn) {
 }
 const A = () => app.contentWindow, D = () => app.contentDocument;
 
+// ---- motion: every move is a Web Animation, so the compositor keeps it smooth while the page works
+const EASE = 'cubic-bezier(.65,0,.35,1)';
+async function anim(el, from, to, ms, easing = EASE) {
+  const a = el.animate([from, to], { duration: ms, easing, fill: 'forwards' });
+  await a.finished; a.commitStyles(); a.cancel();
+}
+const H = 1700 * K; // the app frame is 1440x1700 CSS px; the camera pans over it instead of scrolling
+
 // ---- camera: shows the region (x, y) with zoom s; the bottom 170 px stay clear for captions
 const C = { x: 0, y: 0, s: 1 };
-const setCam = () => { cam.style.transform = `scale(${C.s}) translate(${-C.x}px, ${-C.y}px)`; };
+const camT = (c) => `scale(${c.s}) translate(${-c.x}px, ${-c.y}px)`;
+const setCam = () => { cam.style.transform = camT(C); };
 function target(r, pad = 40, maxS = 2.1) {
   const vh = 1080 - 170;
   let s = Math.min(1920 / (r.w + 2 * pad), vh / (r.h + 2 * pad), maxS); s = Math.max(1, s);
   let x = r.x + r.w / 2 - 1920 / s / 2, y = r.y + r.h / 2 - vh / s / 2;
-  x = Math.max(0, Math.min(1920 - 1920 / s, x)); y = Math.max(0, Math.min(1080 - 1080 / s, y));
+  x = Math.max(0, Math.min(1920 - 1920 / s, x)); y = Math.max(0, Math.min(H - 1080 / s, y));
   return { x, y, s };
 }
-async function camTo(t, ms = 1400) { const f = { ...C }; await tween(ms, (e) => { C.x = f.x + (t.x - f.x) * e; C.y = f.y + (t.y - f.y) * e; C.s = f.s + (t.s - f.s) * e; setCam(); }); }
+async function camTo(t, ms = 1400) { const f = { ...C }; Object.assign(C, t); await anim(cam, { transform: camT(f) }, { transform: camT(C) }, ms); }
 function rectOf(sel, idx = 0) {
   const el = typeof sel === 'string' ? D().querySelectorAll(sel)[idx] : sel;
   const b = el.getBoundingClientRect();
   return { x: b.left * K, y: b.top * K, w: b.width * K, h: b.height * K, el };
 }
 const union = (...rs) => { const x = Math.min(...rs.map((r) => r.x)), y = Math.min(...rs.map((r) => r.y)); return { x, y, w: Math.max(...rs.map((r) => r.x + r.w)) - x, h: Math.max(...rs.map((r) => r.y + r.h)) - y }; };
-async function scrollApp(to, ms = 900) { const from = A().scrollY; await tween(ms, (e) => A().scrollTo(0, from + (to - from) * e)); }
-async function scrollInto(sel, top = 80) { const el = D().querySelector(sel); const y = el.getBoundingClientRect().top + A().scrollY - top; await scrollApp(Math.max(0, y)); }
 
 // ---- cursor
 const P = { x: 1500, y: 1180 };
-const setCur = () => { cursor.style.transform = `translate(${P.x}px, ${P.y}px)`; };
-async function moveTo(x, y, ms = 900) { const f = { ...P }; await tween(ms, (e) => { P.x = f.x + (x - f.x) * e; P.y = f.y + (y - f.y) * e; setCur(); }); }
+const curT = (p) => `translate(${p.x}px, ${p.y}px)`;
+const setCur = () => { cursor.style.transform = curT(P); };
+async function moveTo(x, y, ms = 900) { const f = { ...P }; P.x = x; P.y = y; await anim(cursor, { transform: curT(f) }, { transform: curT(P) }, ms); }
 async function clickEl(sel, idx = 0) {
   const r = rectOf(sel, idx);
   await moveTo(r.x + Math.min(r.w * .5, 160), r.y + r.h * .5);
   ring.style.left = P.x + 'px'; ring.style.top = P.y + 'px';
-  tween(380, (e, t) => { ring.style.opacity = String(1 - t); ring.style.transform = `scale(${.5 + t})`; });
+  ring.animate([{ opacity: 1, transform: 'scale(.5)' }, { opacity: 0, transform: 'scale(1.5)' }], { duration: 420, easing: 'ease-out' });
   await sleep(120);
   r.el.click();
 }
@@ -98,11 +106,11 @@ async function clickEl(sel, idx = 0) {
 // ---- captions
 async function cap(text, kicker = '', tone = '') {
   const c = $('#cap');
-  if (c.style.opacity !== '0' && c.style.opacity !== '') await tween(260, (e) => { c.style.opacity = String(1 - e); });
+  if (getComputedStyle(c).opacity !== '0') await anim(c, { opacity: 1 }, { opacity: 0 }, 260, 'ease-in');
   c.className = tone; c.innerHTML = (kicker ? `<small>${kicker}</small>` : '') + text;
-  await tween(320, (e) => { c.style.opacity = String(e); c.style.transform = `translateY(${12 * (1 - e)}px)`; });
+  await anim(c, { opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'translateY(0)' }, 340, 'ease-out');
 }
-async function capOff() { const c = $('#cap'); await tween(260, (e) => { c.style.opacity = String(1 - e); }); }
+async function capOff() { const c = $('#cap'); if (getComputedStyle(c).opacity !== '0') await anim(c, { opacity: 1 }, { opacity: 0 }, 260, 'ease-in'); }
 
 // ---- terminal (real recorded output, see video/capture/)
 const out = $('#out'); let lines = [];
@@ -118,14 +126,13 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt
 function ansi(text) {
   return text.split('\n').map((line) => {
     let html = '', open = 0;
-    for (const part of line.split(/\x1b\[(\d+)m/)) { /* alternate text / code */ }
     const re = /\x1b\[(\d+)m/g; let last = 0, m;
     while ((m = re.exec(line))) { html += esc(line.slice(last, m.index)); last = re.lastIndex; if (m[1] === '0') { html += '</span>'.repeat(open); open = 0; } else { html += `<span class="a${m[1]}">`; open++; } }
     return html + esc(line.slice(last)) + '</span>'.repeat(open);
   });
 }
-async function termIn() { const t = $('#term'), d = $('#dim'); await tween(900, (e) => { t.style.transform = `translateY(${1150 * (1 - e)}px)`; d.style.opacity = String(e); }); }
-async function termOut() { const t = $('#term'), d = $('#dim'); await tween(800, (e) => { t.style.transform = `translateY(${1150 * e}px)`; d.style.opacity = String(1 - e); }); }
+async function termIn() { await Promise.all([anim($('#term'), { transform: 'translateY(1150px)' }, { transform: 'translateY(0)' }, 900), anim($('#dim'), { opacity: 0 }, { opacity: 1 }, 900)]); }
+async function termOut() { await Promise.all([anim($('#term'), { transform: 'translateY(0)' }, { transform: 'translateY(1150px)' }, 800), anim($('#dim'), { opacity: 1 }, { opacity: 0 }, 800)]); }
 
 // ---- readiness: the app's engine has loaded and fonts are in
 window.stageReady = false;
@@ -156,13 +163,11 @@ window.startTimeline = async () => {
   await camTo(target(rectOf('.trail-wrap'), 20, 1.6), 1300);
   await cap('INV-1042 bills PO-7713, but nothing was received against it. The dashed red card is the link the trail expects and cannot find.', 'Invoice has no goods receipt');
   await sleep(5200);
-  await scrollInto('.finding', 20);
   await camTo(target(rectOf('.finding'), 24, 1.7), 1100);
   await cap('Vector search finds lookalike receipts; the graph rules out the one already received against another PO. GRN-5520 was keyed to PO-7731, which doesn’t exist.');
   await sleep(6500);
   await clickEl('[data-link]');
   await sleep(500);
-  await scrollApp(0, 700);
   await camTo(target(union(rectOf('.inv-head'), rectOf('.trail-wrap')), 20, 1.5), 1100);
   await cap('One click links it. The trail holds: matched, and ₹99,120 comes off the at-risk total.', 'Fixed', 'ok');
   await sleep(4200);
@@ -186,7 +191,6 @@ window.startTimeline = async () => {
   await sleep(5600);
   // 6. The Cypher
   await capOff();
-  await scrollInto('.cols', 10);
   await camTo(target(rectOf('#side'), 20, 1.7), 1100);
   await cap('Every check is a plain Cypher file: quantified path patterns, vector SEARCH, subqueries. The same files run here, in the CLI and for agents.', 'How the graph found it');
   await sleep(5200);
@@ -198,7 +202,6 @@ window.startTimeline = async () => {
   await sleep(4600);
   // 7. Terminal: CLI, MCP, Relate CLI
   await capOff();
-  await scrollApp(0, 600);
   await camTo({ x: 0, y: 0, s: 1 }, 700);
   await termIn();
   await cap('The same graph from the command line. The books are one file: store/trailmark.rl.', 'Python · Relate embedded');
@@ -226,8 +229,7 @@ window.startTimeline = async () => {
   await capOff();
   await termOut();
   // 8. Close
-  const end = $('#end');
-  await tween(900, (e) => { end.style.opacity = String(e); });
+  await anim($('#end'), { opacity: 0 }, { opacity: 1 }, 900, 'ease-out');
   await sleep(6000);
   window.timelineDone = true;
 };
