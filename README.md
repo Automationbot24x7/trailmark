@@ -2,7 +2,7 @@
 
 **Why doesn't this invoice reconcile?** Trailmark follows an invoice through the accounts-payable trail (purchase order, goods receipt, invoice, payment, bank line, our GSTR-2B) as a [Relate](https://github.com/relatedb/relate) graph. It points at the exact link that is broken and shows the path that proves it.
 
-[**Live demo**](https://automationbot24x7.github.io/trailmark/) (runs in your browser, nothing to install) · Python, CLI and AI-agent tools below
+[**Live demo**](https://automationbot24x7.github.io/trailmark/) (runs in your browser, nothing to install) · [**Demo video (1:42)**](https://youtu.be/RA4vIVOmemc) · Python, CLI and AI-agent tools below
 
 ![Trailmark showing invoice INV-1042: the goods-receipt link is missing, and a receipt keyed against a non-existent PO is suggested as the fix](docs/shot-INV-1042.png)
 
@@ -227,6 +227,10 @@ data/             sample ledgers and their generator
 store/            the Relate store
 tests/            end-to-end tests (standard library only)
 ```
+
+## Demo video
+
+[Watch on YouTube (1:42)](https://youtu.be/RA4vIVOmemc): one continuous take of the app, then the command line, an AI agent fixing INV-1042 over MCP, and Relate's own CLI reading the fix from `store/trailmark.rl`. The terminal output is real, recorded and replayed. The video is made by [`video/`](video/): `stage.html` is the take, `record.mjs` records it with Chrome's screencast, and `build.py` assembles it with ffmpeg.
 
 ## Credits and disclosure
 
