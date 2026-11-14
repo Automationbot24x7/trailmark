@@ -113,7 +113,7 @@ const SLOT = { Vendor: [0, 0], PurchaseOrder: [1, 0], GoodsReceipt: [2, 0], Invo
   GstrLine: [3, 1], BankAccount: [4, 1], BankChange: [5, 1], Employee: [5, 2] };
 const KIND = { Vendor: 'Vendor', PurchaseOrder: 'Purchase order', GoodsReceipt: 'Goods receipt', Invoice: 'Invoice', Payment: 'Payment',
   BankLine: 'Bank line', GstrLine: "Supplier's GSTR-2B", BankAccount: 'Paid to account', BankChange: 'Bank detail change', Employee: 'Employee' };
-const W = 152, H = 66, GX = 62, PADX = 22, TOP = 70, VG = 14, BAND = 50;
+const W = 172, H = 74, GX = 56, PADX = 22, TOP = 72, VG = 14, BAND = 52;
 
 function lines(n) {
   const p = n.props;
@@ -140,8 +140,13 @@ function layout(ex) {
   const since = Object.fromEntries(ex.rels.filter((r) => r.type === 'HAS_ACCOUNT' && /^V-/.test(r.from)).map((r) => [r.to, r.props.since]));
   const items = [...ghosts, ...ex.nodes.map((n) => ({ ...n, vendorSince: since[n.id] }))];
   const bySlot = {};
+  // people sit side by side under the money, the most-connected one under the account
+  const deg = (id) => ex.rels.filter((r) => r.from === id || r.to === id).length;
+  const people = items.filter((it) => it.label === 'Employee').sort((a, b) => deg(b.id) - deg(a.id) || a.id.localeCompare(b.id));
+  const PEOPLE_COLS = [4, 5, 3, 2, 1];
+  people.forEach((it, i) => { it.slot = [PEOPLE_COLS[i % 5], 2]; });
   for (const it of items) {
-    const s = SLOT[it.label]; if (!s) continue;
+    const s = it.slot || SLOT[it.label]; if (!s) continue;
     const key = s.join(',');
     (bySlot[key] ||= []).push(it);
   }
@@ -206,7 +211,7 @@ function renderTrail(ex, animate) {
     if (Object.values(L.pos).some((p) => p.it.label === label)) return;
     const x = PADX + c * (W + GX), y = L.rowY[0];
     const note = (label === 'Payment' || label === 'BankLine') && ex.inv.due > S.Q.as_of ? `none yet · due ${nice(ex.inv.due)}` : 'none';
-    cards += `<g class="card dim"><rect class="box" x="${x}" y="${y}" width="${W}" height="${H}" style="stroke-dasharray:2 3"/><text class="l2" x="${x + 12}" y="${y + 38}">${note}</text></g>`;
+    cards += `<g class="card dim"><rect class="box" x="${x}" y="${y}" width="${W}" height="${H}" style="stroke-dasharray:2 3"/><text class="l2" x="${x + 12}" y="${y + 42}">${note}</text></g>`;
   });
   let k = 0;
   const edge = (a, b, cls, label, delay) => {
@@ -244,7 +249,7 @@ function renderTrail(ex, animate) {
       cards += `<g class="card ghost${animate ? ' appear' : ''}" style="animation-delay:${delay + 260}ms" data-id="${it.id}">
         <rect class="box" x="${x}" y="${y}" width="${W}" height="${H}"/>
         <text class="k" x="${x + 12}" y="${y + 18}">Expected · not found</text>
-        ${wrapWords(it.text.replace('expected: ', ''), 22).slice(0, 2).map((t, i) => `<text class="l1" x="${x + 12}" y="${y + 38 + i * 15}">${esc(t)}</text>`).join('')}</g>`;
+        ${wrapWords(it.text.replace('expected: ', ''), 21).slice(0, 2).map((t, i) => `<text class="l1" x="${x + 12}" y="${y + 40 + i * 17}">${esc(t)}</text>`).join('')}</g>`;
       continue;
     }
     const [l1, l2] = lines(it);
@@ -255,10 +260,10 @@ function renderTrail(ex, animate) {
     const kind = isCand ? 'Candidate · unlinked receipt' : isFixed ? 'Goods receipt · linked' : KIND[it.label];
     cards += `<g class="${cls}" style="animation-delay:${delay}ms" data-id="${it.id}">
       <rect class="box" x="${x}" y="${y}" width="${W}" height="${H}"/>
-      <text class="k" x="${x + 12}" y="${y + 17}">${esc(kind)}</text>
-      <text class="i" x="${x + 12}" y="${y + 34}">${esc(it.id)}</text>
-      <text class="l1" x="${x + 12}" y="${y + 49}">${esc(trunc(l1, 23))}</text>
-      <text class="l2" x="${x + 12}" y="${y + 61}">${esc(trunc(l2, 26))}</text>
+      <text class="k" x="${x + 12}" y="${y + 18}">${esc(kind)}</text>
+      <text class="i" x="${x + 12}" y="${y + 37}">${esc(it.id)}</text>
+      <text class="l1" x="${x + 12}" y="${y + 54}">${esc(trunc(l1, 23))}</text>
+      <text class="l2" x="${x + 12}" y="${y + 68}">${esc(trunc(l2, 25))}</text>
       ${ev && !isFixed ? `<rect class="flag" x="${x + W - 10}" y="${y}" width="10" height="10"/>` : ''}</g>`;
   }
   const marker = (id, color) => `<marker id="arr-${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="${color}"/></marker>`;
@@ -308,11 +313,10 @@ function renderStage(animate = true) {
   $('#stage').innerHTML = `
     <div class="inv-head">
       <div>
-        <div class="inv-kicker">Invoice · ${esc(inv.vendor_no)}</div>
+        <div class="inv-kicker"><span class="status ${ex.status}" id="status">${statusText}</span><span>Invoice · ${esc(inv.vendor_no)}</span></div>
         <h1 class="inv-title">${inv.id} <span class="vn">${esc(inv.vendor)}</span></h1>
         <div class="inv-meta">${inr(inv.total)}<span class="sep">/</span>dated ${nice(inv.date)}<span class="sep">/</span>due ${nice(inv.due)}<span class="sep">/</span>${inv.payments.length ? 'paid by ' + inv.payments.join(', ') : 'unpaid'}</div>
       </div>
-      <div class="status ${ex.status}" id="status">${statusText}</div>
     </div>
     <div class="trail-wrap">
       <div class="trail-cap"><span><b>The trail</b> · ${ex.nodes.length} nodes, ${ex.rels.length} relationships, walked in ${fmtMs(S.timings.trail)}</span>
