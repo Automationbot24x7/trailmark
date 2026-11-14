@@ -114,7 +114,7 @@ python -m trailmark view            # the graph in your browser, on http://127.0
   ● INV-1040   Same invoice paid twice                           ₹56,640
       Duplicate of INV-1039, both paid
   ● INV-1038   Billed more than was received                      ₹4,956
-      Billed 1000, received 900
+      Billed 1,000, received 900
   ● INV-1042   Invoice has no goods receipt                      ₹99,120
       No goods receipt for PO-7713
   ● INV-1041   Tax credit claimed, supplier never filed          ₹43,200
@@ -206,7 +206,7 @@ SELECT e.name, 'approved the bank change'   FROM payments p JOIN bank_changes bc
                                             JOIN employees e          ON e.id = bc.approved_by          WHERE p.id = 'PAY-3410';
 ```
 
-The Cypher finds all four routes, including ones nobody thought to write a join for. The same holds for the trail itself: [`cypher/trail.cypher`](cypher/trail.cypher) is one 0-3 hop pattern that never walks *through* another invoice or bank account, so it pulls exactly one invoice's documents, however many payments, debits and returns there are.
+The Cypher returns all of these, plus a fifth route nobody wrote a join for: from the payment to the clerk who approved it, to the bank change that clerk entered, to the AP lead who approved that change. The same holds for the trail itself: [`cypher/trail.cypher`](cypher/trail.cypher) is one 0-3 hop pattern that never walks *through* another invoice or bank account, so it pulls exactly one invoice's documents, however many payments, debits and returns there are.
 
 ## Where the data lives
 

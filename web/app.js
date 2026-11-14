@@ -117,7 +117,7 @@ const SLOT = { Vendor: [0, 0], PurchaseOrder: [1, 0], GoodsReceipt: [2, 0], Invo
   GstrLine: [3, 1], BankAccount: [4, 1], BankChange: [5, 1], Employee: [5, 2] };
 const KIND = { Vendor: 'Vendor', PurchaseOrder: 'Purchase order', GoodsReceipt: 'Goods receipt', Invoice: 'Invoice', Payment: 'Payment',
   BankLine: 'Bank line', GstrLine: 'Our GSTR-2B', BankAccount: 'Paid to account', BankChange: 'Bank detail change', Employee: 'Employee' };
-const W = 172, H = 74, GX = 56, PADX = 22, TOP = 72, VG = 14, BAND = 52, RIGHT = 74;
+const W = 172, H = 74, GX = 66, PADX = 22, TOP = 72, VG = 14, BAND = 52, RIGHT = 74;
 
 function lines(n) {
   const p = n.props;
@@ -129,7 +129,7 @@ function lines(n) {
     case 'Payment': return [inr(p.amount), `${nice(p.date)} · UTR …${String(p.utr).slice(-6)}`];
     case 'BankLine': return [`${p.direction} ${inr(p.amount)}`, `${nice(p.date)} · ${p.narration.includes('RETURN') ? 'RETURN · A/C CLOSED' : 'NEFT ' + p.utr.slice(-6)}`];
     case 'GstrLine': return [`${p.vendor_inv_no} · tax ${inr(p.tax)}`, `period ${p.period}`];
-    case 'BankAccount': return [p.bank, n.vendorSince ? `··${p.last4} · vendor's since ${MONTHS[+n.vendorSince.slice(5, 7) - 1]} ${n.vendorSince.slice(2, 4)}` : `··${p.last4}`];
+    case 'BankAccount': return [p.bank, n.vendorSince ? `vendor's since ${nice(n.vendorSince)}` : `··${p.last4}`];
     case 'BankChange': return [p.reason, nice(p.date)];
     case 'Employee': return [p.name, p.role];
   }
@@ -189,8 +189,8 @@ function edgePath(a, b) {
     }
     const between = Object.values(LAST.pos).some((q) => Math.abs(q.x - top.x) < 1 && q.y > top.y + 1 && q.y < bot.y - 1);
     if (between) { // cards in the way: swing out into the left gutter
-      const x = top.x, y1 = bot.y + H / 2, y2 = top.y + H / 2;
-      return { d: `M${x} ${y1} C${x - 30} ${y1}, ${x - 30} ${y2}, ${x} ${y2}`, mx: x - GX / 2, my: (y1 + y2) / 2, anchor: 'middle', rev: ay < by };
+      const x = top.x, y1 = bot.y + H * 0.35, y2 = top.y + H * 0.82;
+      return { d: `M${x} ${y1} C${x - 34} ${y1}, ${x - 34} ${y2}, ${x} ${y2}`, mx: x - GX / 2, my: (y1 + y2) / 2, anchor: 'middle', rev: ay < by };
     }
     const x = top.x + W / 2, y1 = top.y + H, y2 = bot.y;
     return { d: `M${x} ${y1} L${x} ${y2}`, mx: x + 6, my: (y1 + y2) / 2 + 3, anchor: 'start', rev: ay > by };
@@ -200,9 +200,13 @@ function edgePath(a, b) {
     const x1 = left.x + W * 0.62, x2 = right.x + W * 0.38, y = left.y, top = y - 30;
     return { d: `M${x1} ${y} C${x1} ${top}, ${x2} ${top}, ${x2} ${y}`, mx: (x1 + x2) / 2, my: top + 4, anchor: 'middle', rev: ax > bx, arc: true };
   }
-  const x1 = left.x + W, y1 = left.y + H / 2, x2 = right.x, y2 = right.y + H / 2;
+  const cross = Math.abs(left.y - right.y) > 1;
+  const yl = cross ? left.y + H * (left.y > right.y ? 0.22 : 0.8) : left.y + H / 2;
+  const yr = cross ? right.y + H * (right.y > left.y ? 0.22 : 0.8) : right.y + H / 2;
+  const x1 = left.x + W, y1 = yl, x2 = right.x, y2 = yr;
   const dx = Math.max(24, (x2 - x1) / 2);
-  return { d: `M${x1} ${y1} C${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 - 4, anchor: 'middle', rev: ax > bx };
+  const above = !cross && x2 - x1 < W;
+  return { d: `M${x1} ${y1} C${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`, mx: (x1 + x2) / 2, my: above ? y1 - 16 : (y1 + y2) / 2 - 4, anchor: 'middle', rev: ax > bx };
 }
 
 let LAST = { pos: {} };
@@ -240,7 +244,7 @@ function renderTrail(ex, animate) {
     edges += `<path class="edge ${cls}${animate ? ' draw' : ''}" d="${p.d}" style="--len:${len};animation-delay:${delay}ms" ${p.rev ? 'marker-start' : 'marker-end'}="${mk}"><title>${esc(label || '')}</title></path>`;
     if (!label) return;
     const parts = !p.arc && label.length > 8 && label.includes('_') ? [label.slice(0, label.indexOf('_') + 1), label.slice(label.indexOf('_') + 1)] : [label];
-    const cw = 5.5, lw = Math.max(...parts.map((t) => t.length)) * cw + 8, lh = parts.length * 10 + 4;
+    const cw = 6.1, lw = Math.max(...parts.map((t) => t.length)) * cw + 8, lh = parts.length * 10 + 4;
     const lx = p.anchor === 'middle' ? p.mx - lw / 2 : p.anchor === 'end' ? p.mx - lw + 4 : p.mx - 4;
     const top = p.my - (parts.length - 1) * 5 - 9;
     labels += `<g class="elab ${cls}"><rect x="${lx}" y="${top}" width="${lw}" height="${lh}"/><text class="elabel ${cls}" x="${p.mx}" y="${top + 9}" text-anchor="${p.anchor}">${parts.map((t, i) => `<tspan x="${p.mx}" dy="${i ? 10 : 0}">${esc(t)}</tspan>`).join('')}</text></g>`;
@@ -330,7 +334,7 @@ function renderStage(animate = true) {
       <p class="f-detail">${rich(f.detail)}</p>
       <div class="f-path"><span class="lbl">Evidence</span>${(f.path || []).map((id) => `<span class="chip" data-id="${id}">${id}</span>`).join('<span class="arr">·</span>')}</div>
       ${f.suggestion ? `<div class="fix"><div><p><b>Suggested fix:</b> ${rich(f.suggestion.text)}</p>
-        <small>Vector search over receipt text from the same vendor scored it ${Number(f.suggestion.similarity).toFixed(2)}${(f.suggestion.rejected || []).length ? `; the graph ruled out ${f.suggestion.rejected.map(esc).join('; ')}` : ''}. The link is written to the graph in this tab only; reload to undo.</small></div>
+        <small>Vector search over receipt text from the same vendor scored it ${Number(f.suggestion.similarity).toFixed(2)}${(f.suggestion.rejected || []).length ? `; the graph ruled out ${f.suggestion.rejected.map(esc).join(', ')}` : ''}. The link is written to the graph in this tab only; reload to undo.</small></div>
         <button class="btn" data-link="${f.suggestion.grn}|${f.suggestion.po}">Link ${f.suggestion.grn}</button></div>` : ''}
     </article>`;
   }

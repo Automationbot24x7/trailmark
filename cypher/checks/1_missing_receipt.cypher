@@ -22,7 +22,7 @@ RETURN 'missing-receipt' AS check,
        CASE WHEN candidate IS NULL THEN 'No unlinked receipt from this vendor looks like it.'
          ELSE candidate.id + ' ("' + candidate.item + '", ' + toString(candidate.qty) + ' received on ' + candidate.date +
               ') is from the same vendor, linked to no PO, and was keyed against ' + candidate.ref + ', a PO number that does not exist.' +
-              reduce(s = '', r IN rejected | s + ' ' + r.id + ' looks closer (' + toString(r.sim) + ') but ' +
+              reduce(s = '', r IN rejected | s + ' ' + r.id + ' scores higher (' + toString(toInteger(r.sim)) + '.' + right('0' + toString(toInteger(round(r.sim * 100)) % 100), 2) + ') but ' +
                      CASE WHEN r.linked_to IS NOT NULL THEN 'is already received against ' + r.linked_to + '.'
                           ELSE 'has a different quantity (' + toString(r.qty) + ').' END)
        END AS detail,
@@ -31,6 +31,6 @@ RETURN 'missing-receipt' AS check,
        {after: po.id, label: 'GoodsReceipt', text: 'expected: a receipt against ' + po.id} AS missing,
        CASE WHEN candidate IS NULL THEN null
          ELSE {action: 'link_receipt', grn: candidate.id, po: po.id, similarity: candidate.sim,
-               rejected: [r IN rejected | r.id + ' ' + toString(r.sim) + CASE WHEN r.linked_to IS NOT NULL THEN ', already on ' + r.linked_to ELSE ', qty ' + toString(r.qty) END],
+               rejected: [r IN rejected | r.id + ' (' + toString(toInteger(r.sim)) + '.' + right('0' + toString(toInteger(round(r.sim * 100)) % 100), 2) + CASE WHEN r.linked_to IS NOT NULL THEN ', already received against ' + r.linked_to ELSE ', quantity ' + toString(r.qty) END + ')'],
                text: 'Link ' + candidate.id + ' to ' + po.id + ' (keyed as ' + candidate.ref + ')'}
        END AS suggestion

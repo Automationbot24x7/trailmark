@@ -134,7 +134,7 @@ def finding(f: dict, n: int | None = None) -> str:
     ]
     if f.get("suggestion"):
         s = f["suggestion"]
-        lines.append(f"         {amber('Suggested fix:')} {s['text']}  (text similarity {s['similarity']})")
+        lines.append(f"         {amber('Suggested fix:')} {s['text']}  (text similarity {s['similarity']:.2f})")
         lines.append(f"         {dim('trailmark link ' + s['grn'] + ' ' + s['po'])}")
     lines.append(f"         {dim('query: ' + f['query_file'])}")
     return "\n".join(lines)
