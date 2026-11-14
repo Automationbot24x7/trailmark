@@ -1,0 +1,27 @@
+id,po_ref,vendor_id,date,item,qty
+GRN-5401,PO-7601,V-101,2026-09-05,Corrugated box 5-ply 18x12x12,800
+GRN-5402,PO-7602,V-101,2026-10-17,Stretch film roll 23 micron,60
+GRN-5403,PO-7603,V-102,2026-09-12,"Line haul Pune-Nashik, 9T truck",6
+GRN-5404,PO-7604,V-103,2026-09-14,MS angle bracket 50x50,300
+GRN-5405,PO-7605,V-104,2026-09-16,Toner cartridge 88A,24
+GRN-5406,PO-7606,V-105,2026-09-08,"Isopropyl alcohol 99%, 200L drum",6
+GRN-5407,PO-7607,V-106,2026-09-23,LED panel light 2x2 40W,120
+GRN-5408,PO-7608,V-106,2026-10-20,"Copper cable 4 sq mm, 90m coil",15
+GRN-5409,PO-7609,V-107,2026-09-26,"Product leaflet A5, 4 colour",20000
+GRN-5410,PO-7610,V-108,2026-09-08,"Housekeeping contract, September",1
+GRN-5411,PO-7611,V-109,2026-09-10,Heat-treated pallet 1200x1000,250
+GRN-5412,PO-7612,V-109,2026-10-15,Heat-treated pallet 1200x1000,300
+GRN-5413,PO-7613,V-110,2026-09-18,Torque wrench 40-200 Nm,8
+GRN-5414,PO-7614,V-111,2026-09-05,"Canteen services, September",1
+GRN-5415,PO-7615,V-111,2026-10-09,"Canteen services, October",1
+GRN-5416,PO-7616,V-112,2026-09-26,USB-C docking station,30
+GRN-5417,PO-7617,V-112,2026-10-21,27-inch monitor IPS,20
+GRN-5520,PO-7731,V-103,2026-10-15,MS angle bracket 50x50,400
+GRN-5531,PO-7720,V-101,2026-10-03,Corrugated box 5-ply 18x12x12,600
+GRN-5538,PO-7720,V-101,2026-10-10,Corrugated box 5-ply 18x12x12,300
+GRN-5418,PO-7618,V-102,2026-09-30,"Line haul Pune-Nashik, 9T truck",5
+GRN-5419,PO-7619,V-102,2026-10-04,"Line haul Pune-Nashik, 9T truck",7
+GRN-5420,PO-7620,V-102,2026-10-07,"Line haul Pune-Nashik, 9T truck",9
+GRN-5512,PO-7702,V-104,2026-10-03,"A4 copier paper 75 gsm, ream",240
+GRN-5527,PO-7724,V-105,2026-10-01,"Isopropyl alcohol 99%, 200L drum",10
+GRN-5523,PO-7730,V-108,2026-10-01,"Housekeeping contract, Q4 advance",1

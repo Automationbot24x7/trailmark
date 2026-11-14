@@ -1,0 +1,3 @@
+id,vendor_id,old_account_id,new_account_id,date,entered_by,approved_by,reason
+BC-0077,V-108,BA-4449,BA-8865,2026-10-17,E-06,E-02,Vendor letter: bank migrated
+BC-0061,V-106,BA-4435,BA-4471,2026-08-04,E-07,E-02,"Cancelled cheque on file, call-back done"

@@ -1,0 +1,461 @@
+// Trailmark browser view. Relate runs here as WebAssembly: the page rebuilds the
+// graph from an export of store/trailmark.rl, then runs the same .cypher files
+// the command line and the agent server use.
+import init, { RelateDb } from './vendor/relate-wasm/relate.js';
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const S = { db: null, graph: null, Q: null, findings: [], invoices: [], states: {}, sel: null, tab: 'why', linked: new Map(), timings: {} };
+
+// ---------------------------------------------------------------- engine
+function run(cypher, params) {
+  const env = JSON.parse(S.db.execute(cypher, params ? JSON.stringify(params) : null));
+  if (env.error) throw new Error(env.error);
+  return env;
+}
+const rows = (cypher, params) => run(cypher, params).rows;
+
+function loadGraph() {
+  if (S.db) S.db.free();
+  S.db = new RelateDb();
+  for (const s of S.Q.schema) run(s);
+  for (const g of S.graph.nodes) run(`UNWIND $rows AS r CREATE (n:${g.label}) SET n = r`, { rows: g.rows });
+  for (const g of S.graph.rels) {
+    run(`UNWIND $rows AS r MATCH (a:${g.from} {id: r.a}) MATCH (b:${g.to} {id: r.b}) CREATE (a)-[x:${g.type}]->(b) SET x = r.props`, { rows: g.rows });
+  }
+}
+
+function scan() {
+  const out = [];
+  for (const c of S.Q.checks) {
+    const env = run(c.text);
+    S.timings[c.file] = env.elapsed_ms;
+    for (const r of env.rows) out.push({ ...r, title: c.title, file: c.file });
+  }
+  out.sort((a, b) => (a.severity !== 'high') - (b.severity !== 'high') || b.amount - a.amount);
+  S.findings = out;
+  S.invoices = rows(`MATCH (i:Invoice)-[:ISSUED_BY]->(v:Vendor)
+    OPTIONAL MATCH (p:Payment)-[:SETTLES]->(i)
+    WITH i, v, collect(p.id) AS payments
+    RETURN i.id AS id, v.name AS vendor, i.vendor_inv_no AS vendor_no, i.date AS date, i.total AS total, payments, v.terms_days AS terms
+    ORDER BY i.id`);
+  S.states = {};
+  for (const i of S.invoices) {
+    const f = out.filter((x) => x.invoice === i.id);
+    i.due = addDays(i.date, i.terms);
+    S.states[i.id] = f.length ? 'exception' : i.payments.length ? 'reconciled' : i.due > S.Q.as_of ? 'matched' : 'overdue';
+  }
+}
+
+function explain(id) {
+  const inv = S.invoices.find((i) => i.id === id);
+  const found = S.findings.filter((f) => f.invoice === id);
+  const extra = [...new Set(found.flatMap((f) => [...(f.path || []), ...(f.suggestion ? [f.suggestion.grn] : [])]))];
+  const env = run(S.Q.trail.text, { id, extra });
+  S.timings.trail = env.elapsed_ms;
+  const t = env.rows[0];
+  return { inv, status: S.states[id], findings: found, nodes: t.nodes, rels: t.rels.filter(Boolean) };
+}
+
+// ---------------------------------------------------------------- formatting
+function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + Number(n)); return d.toISOString().slice(0, 10); }
+function inr(n) {
+  const neg = n < 0; let s = String(Math.round(Math.abs(Number(n))));
+  if (s.length > 3) s = s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + s.slice(-3);
+  return (neg ? '-' : '') + '₹' + s;
+}
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const nice = (iso) => { const [y, m, d] = iso.split('-'); return `${+d} ${MONTHS[+m - 1]} ${y}`; };
+const ID_RE = /\b(INV-\d+|PO-\d+|GRN-\d+|PAY-\d+|BL-\d+|BA-\d+|BC-\d+|G2B-\d+|E-\d{2}|V-\d{3})\b/g;
+function rich(text) {
+  return esc(text).replace(/Rs (\d+)/g, (_, n) => inr(n)).replace(ID_RE, (m) => `<span class="chip" data-id="${m}">${m}</span>`);
+}
+function wrapWords(t, n) { const out = []; let cur = ''; for (const w of t.split(' ')) { if ((cur + ' ' + w).trim().length > n && cur) { out.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); } if (cur) out.push(cur); return out; }
+const trunc = (s, n) => (s = String(s ?? ''), s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+// ---------------------------------------------------------------- ledger list
+function renderLedger() {
+  const n = (s) => Object.values(S.states).filter((x) => x === s).length;
+  const risk = S.findings.reduce((a, f) => a + Number(f.amount || 0), 0);
+  $('#risk').textContent = inr(risk);
+  $('#exc-n').textContent = n('exception');
+  $('#asof').textContent = nice(S.Q.as_of);
+  $('#tally').innerHTML = `
+    <div class="t-exc"><b>${n('exception')}</b><span>exceptions</span></div>
+    <div class="t-ok"><b>${n('reconciled')}</b><span>reconciled</span></div>
+    <div><b>${n('matched')}</b><span>matched, not yet due</span></div>`;
+  const groups = [['exception', 'Exceptions'], ['matched', 'Matched, not yet due'], ['overdue', 'Overdue'], ['reconciled', 'Reconciled']];
+  let html = '';
+  for (const [st, name] of groups) {
+    let list = S.invoices.filter((i) => S.states[i.id] === st);
+    if (!list.length) continue;
+    if (st === 'exception') {
+      const order = S.findings.map((f) => f.invoice);
+      list = list.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    }
+    html += `<div class="group-h"><span>${name}</span><span>${list.length}</span></div>`;
+    for (const i of list) {
+      const f = S.findings.find((x) => x.invoice === i.id);
+      html += `<button class="row${S.sel === i.id ? ' sel' : ''}" data-inv="${i.id}">
+        <span class="dot ${st}"></span>
+        <span class="who"><span class="id">${i.id}</span><span class="v">${esc(i.vendor)}</span>
+        ${f ? `<span class="why">${rich(f.headline).replace(/<[^>]+>/g, '')}</span>` : ''}</span>
+        <span class="amt">${inr(i.total)}</span></button>`;
+    }
+  }
+  $('#list').innerHTML = html;
+}
+
+// ---------------------------------------------------------------- trail canvas
+const LANES = [['Vendor', 'Vendor'], ['PurchaseOrder', 'Purchase order'], ['GoodsReceipt', 'Goods receipt'], ['Invoice', 'Invoice'], ['Payment', 'Payment'], ['BankLine', 'Bank statement']];
+const SLOT = { Vendor: [0, 0], PurchaseOrder: [1, 0], GoodsReceipt: [2, 0], Invoice: [3, 0], Payment: [4, 0], BankLine: [5, 0],
+  GstrLine: [3, 1], BankAccount: [4, 1], BankChange: [5, 1], Employee: [5, 2] };
+const KIND = { Vendor: 'Vendor', PurchaseOrder: 'Purchase order', GoodsReceipt: 'Goods receipt', Invoice: 'Invoice', Payment: 'Payment',
+  BankLine: 'Bank line', GstrLine: "Supplier's GSTR-2B", BankAccount: 'Paid to account', BankChange: 'Bank detail change', Employee: 'Employee' };
+const W = 152, H = 66, GX = 62, PADX = 22, TOP = 70, VG = 14, BAND = 50;
+
+function lines(n) {
+  const p = n.props;
+  switch (n.label) {
+    case 'Vendor': return [p.name, `${p.city} · ${p.gstin}`];
+    case 'PurchaseOrder': return [`${p.qty} × ${p.item}`, `${nice(p.date)} · ${inr(p.total)}`];
+    case 'GoodsReceipt': return [`${p.qty} received · ${trunc(p.item, 14)}`, `${nice(p.date)} · ref ${p.po_ref}`];
+    case 'Invoice': return [`${p.vendor_inv_no} · ${p.qty} unit${p.qty === 1 ? '' : 's'}`, `${nice(p.date)} · ${inr(p.total)}`];
+    case 'Payment': return [inr(p.amount), `${nice(p.date)} · UTR …${String(p.utr).slice(-6)}`];
+    case 'BankLine': return [`${p.direction} ${inr(p.amount)}`, `${nice(p.date)} · ${p.narration.includes('RETURN') ? 'RETURN · A/C CLOSED' : 'NEFT ' + p.utr.slice(-6)}`];
+    case 'GstrLine': return [`${p.vendor_inv_no} · tax ${inr(p.tax)}`, `period ${p.period}`];
+    case 'BankAccount': return [p.bank, `··${p.last4}${n.vendorSince ? ` · vendor's, added ${nice(n.vendorSince).slice(0, -5)}` : ''}`];
+    case 'BankChange': return [p.reason, nice(p.date)];
+    case 'Employee': return [p.name, p.role];
+  }
+  return ['', ''];
+}
+
+function layout(ex) {
+  const ev = new Set(ex.findings.flatMap((f) => f.path || []));
+  const high = ex.findings.some((f) => f.severity === 'high');
+  const sugg = ex.findings.filter((f) => f.suggestion && !S.linked.has(f.suggestion.grn)).map((f) => f.suggestion);
+  const ghosts = ex.findings.filter((f) => f.missing).map((f) => ({ id: '__ghost_' + f.missing.label, label: f.missing.label, ghost: true, text: f.missing.text, after: f.missing.after }));
+  const since = Object.fromEntries(ex.rels.filter((r) => r.type === 'HAS_ACCOUNT' && /^V-/.test(r.from)).map((r) => [r.to, r.props.since]));
+  const items = [...ghosts, ...ex.nodes.map((n) => ({ ...n, vendorSince: since[n.id] }))];
+  const bySlot = {};
+  for (const it of items) {
+    const s = SLOT[it.label]; if (!s) continue;
+    const key = s.join(',');
+    (bySlot[key] ||= []).push(it);
+  }
+  // order inside a slot: ghost, then the focus/evidence nodes, then the rest by id
+  for (const k in bySlot) bySlot[k].sort((a, b) => (b.ghost ? 1 : 0) - (a.ghost ? 1 : 0) || (a.id === ex.inv.id ? -1 : b.id === ex.inv.id ? 1 : 0) || (ev.has(b.id) - ev.has(a.id)) || a.id.localeCompare(b.id));
+  const rowsUsed = [0, 1, 2].filter((r) => Object.keys(bySlot).some((k) => +k.split(',')[1] === r));
+  const rowH = {};
+  for (const r of [0, 1, 2]) rowH[r] = Math.max(1, ...Object.entries(bySlot).filter(([k]) => +k.split(',')[1] === r).map(([, v]) => v.length)) * (H + VG) - VG;
+  const rowY = {}; let y = TOP;
+  for (const r of [0, 1, 2]) { rowY[r] = y; if (rowsUsed.includes(r)) y += rowH[r] + BAND; else if (r === 0) y += H + BAND; }
+  const pos = {};
+  for (const [k, list] of Object.entries(bySlot)) {
+    const [c, r] = k.split(',').map(Number);
+    list.forEach((it, idx) => { pos[it.id] = { x: PADX + c * (W + GX), y: rowY[r] + idx * (H + VG), it }; });
+  }
+  const width = PADX * 2 + 6 * W + 5 * GX;
+  return { pos, ev, high, sugg, ghosts, height: y - BAND + 26, width, rowY, rowsUsed };
+}
+
+function edgePath(a, b) {
+  const ax = a.x, ay = a.y, bx = b.x, by = b.y;
+  if (Math.abs(ax - bx) < 1) { // same column
+    if (Math.abs(ay - by) < 1) return null;
+    const top = ay < by ? a : b, bot = ay < by ? b : a;
+    if (bot.y - top.y <= H + VG + 1) { // stacked neighbours: arc on the right
+      const x = top.x + W, y1 = top.y + H / 2, y2 = bot.y + H / 2;
+      return { d: `M${x} ${y1} C${x + 26} ${y1}, ${x + 26} ${y2}, ${x} ${y2}`, mx: x + 20, my: (y1 + y2) / 2, anchor: 'start', rev: ay > by };
+    }
+    const between = Object.values(LAST.pos).some((q) => Math.abs(q.x - top.x) < 1 && q.y > top.y + 1 && q.y < bot.y - 1);
+    if (between) { // cards in the way: swing out into the left gutter
+      const x = top.x, y1 = bot.y + H / 2, y2 = top.y + H / 2;
+      return { d: `M${x} ${y1} C${x - 30} ${y1}, ${x - 30} ${y2}, ${x} ${y2}`, mx: x - 24, my: (y1 + y2) / 2, anchor: 'end', rev: ay < by };
+    }
+    const x = top.x + W / 2, y1 = top.y + H, y2 = bot.y;
+    return { d: `M${x} ${y1} L${x} ${y2}`, mx: x + 6, my: (y1 + y2) / 2 + 3, anchor: 'start', rev: ay > by };
+  }
+  const left = ax < bx ? a : b, right = ax < bx ? b : a;
+  if (right.x - left.x > W + GX + 1 && Math.abs(ay - by) < 1) { // skips a lane: arc over the top
+    const x1 = left.x + W * 0.62, x2 = right.x + W * 0.38, y = left.y, top = y - 30;
+    return { d: `M${x1} ${y} C${x1} ${top}, ${x2} ${top}, ${x2} ${y}`, mx: (x1 + x2) / 2, my: top + 4, anchor: 'middle', rev: ax > bx, arc: true };
+  }
+  const x1 = left.x + W, y1 = left.y + H / 2, x2 = right.x, y2 = right.y + H / 2;
+  const dx = Math.max(24, (x2 - x1) / 2);
+  return { d: `M${x1} ${y1} C${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 - 4, anchor: 'middle', rev: ax > bx };
+}
+
+let LAST = { pos: {} };
+function renderTrail(ex, animate) {
+  const L = layout(ex);
+  LAST = L;
+  let edges = '', labels = '', cards = '', heads = '';
+  LANES.forEach(([, name], c) => {
+    const x = PADX + c * (W + GX);
+    heads += `<text class="lane-h" x="${x}" y="24">${name}</text>`;
+  });
+  if (L.rowsUsed.includes(1) || L.rowsUsed.includes(2)) {
+    const y = L.rowY[L.rowsUsed.find((r) => r > 0)] - 16;
+    heads += `<line class="lane-rule" x1="${PADX}" x2="${L.width - PADX}" y1="${y - 14}" y2="${y - 14}"/><text class="band-h" x="${PADX}" y="${y}">Tax filing and where the money went</text>`;
+  }
+  // empty main lanes get a quiet note
+  LANES.forEach(([label], c) => {
+    if (Object.values(L.pos).some((p) => p.it.label === label)) return;
+    const x = PADX + c * (W + GX), y = L.rowY[0];
+    const note = (label === 'Payment' || label === 'BankLine') && ex.inv.due > S.Q.as_of ? `none yet · due ${nice(ex.inv.due)}` : 'none';
+    cards += `<g class="card dim"><rect class="box" x="${x}" y="${y}" width="${W}" height="${H}" style="stroke-dasharray:2 3"/><text class="l2" x="${x + 12}" y="${y + 38}">${note}</text></g>`;
+  });
+  let k = 0;
+  const edge = (a, b, cls, label, delay) => {
+    const p = edgePath(a, b); if (!p) return;
+    const len = 400;
+    edges += `<path class="edge ${cls}${animate ? ' draw' : ''}" d="${p.d}" style="--len:${len};animation-delay:${delay}ms" marker-end="url(#arr-${cls.includes('brk') ? 'r' : cls.includes('sug') ? 'a' : cls.includes('fixed') ? 'g' : cls.includes('high') ? 'r' : 'k'})"/>`;
+    const parts = !p.arc && label.length > 11 && label.includes('_') ? [label.slice(0, label.indexOf('_') + 1), label.slice(label.indexOf('_') + 1)] : [label];
+    labels += `<text class="elabel ${cls}" x="${p.mx}" y="${p.my - (parts.length - 1) * 5}" text-anchor="${p.anchor}">${parts.map((t, i) => `<tspan x="${p.mx}" dy="${i ? 10 : 0}">${esc(t)}</tspan>`).join('')}</text>`;
+  };
+  // relationships (drawn from source to target; arrows show the stored direction)
+  const colOf = (id) => (L.pos[id] ? L.pos[id].x : 0);
+  for (const r of ex.rels) {
+    const a = L.pos[r.from], b = L.pos[r.to]; if (!a || !b) continue;
+    // the vendor is reached through the PO; other lines back to the vendor card are written on the cards instead
+    if (a.it.label === 'Vendor' || b.it.label === 'Vendor') { if (r.type !== 'PLACED_WITH') continue; }
+    const isFix = r.type === 'RECEIVED_AGAINST' && S.linked.has(r.from);
+    const ev = L.ev.has(r.from) && L.ev.has(r.to);
+    const cls = isFix ? 'fixed' : ev ? `ev${L.high ? ' high' : ''}` : '';
+    const delay = animate ? 120 + (Math.min(colOf(r.from), colOf(r.to)) / (W + GX)) * 90 : 0;
+    edge(a, b, cls, isFix ? 'RECEIVED_AGAINST · linked' : r.type, delay);
+  }
+  for (const g of L.ghosts) {
+    const a = L.pos[g.after], b = L.pos[g.id];
+    if (a && b) edge(b, a, 'brk', 'missing', 0);
+  }
+  for (const s of L.sugg) {
+    const a = L.pos[s.grn], b = L.pos[s.po];
+    if (a && b) edge(a, b, 'sug', 'suggested link', 0);
+  }
+  // cards
+  for (const { x, y, it } of Object.values(L.pos)) {
+    const col = Math.round((x - PADX) / (W + GX));
+    const delay = animate ? col * 90 : 0;
+    if (it.ghost) {
+      cards += `<g class="card ghost${animate ? ' appear' : ''}" style="animation-delay:${delay + 260}ms" data-id="${it.id}">
+        <rect class="box" x="${x}" y="${y}" width="${W}" height="${H}"/>
+        <text class="k" x="${x + 12}" y="${y + 18}">Expected · not found</text>
+        ${wrapWords(it.text.replace('expected: ', ''), 22).slice(0, 2).map((t, i) => `<text class="l1" x="${x + 12}" y="${y + 38 + i * 15}">${esc(t)}</text>`).join('')}</g>`;
+      continue;
+    }
+    const [l1, l2] = lines(it);
+    const isCand = L.sugg.some((s) => s.grn === it.id);
+    const isFixed = S.linked.has(it.id);
+    const ev = L.ev.has(it.id);
+    const cls = ['card', isFixed ? 'fixed' : isCand ? 'cand' : '', ev && !isFixed ? 'ev' : '', ev && L.high ? 'high' : '', it.id === ex.inv.id ? 'focus' : '', animate ? 'appear' : ''].join(' ');
+    const kind = isCand ? 'Candidate · unlinked receipt' : isFixed ? 'Goods receipt · linked' : KIND[it.label];
+    cards += `<g class="${cls}" style="animation-delay:${delay}ms" data-id="${it.id}">
+      <rect class="box" x="${x}" y="${y}" width="${W}" height="${H}"/>
+      <text class="k" x="${x + 12}" y="${y + 17}">${esc(kind)}</text>
+      <text class="i" x="${x + 12}" y="${y + 34}">${esc(it.id)}</text>
+      <text class="l1" x="${x + 12}" y="${y + 49}">${esc(trunc(l1, 23))}</text>
+      <text class="l2" x="${x + 12}" y="${y + 61}">${esc(trunc(l2, 26))}</text>
+      ${ev && !isFixed ? `<rect class="flag" x="${x + W - 10}" y="${y}" width="10" height="10"/>` : ''}</g>`;
+  }
+  const marker = (id, color) => `<marker id="arr-${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="${color}"/></marker>`;
+  return `<svg class="trail" viewBox="0 0 ${L.width} ${L.height}" role="img" aria-label="Trail of ${ex.inv.id}">
+    <defs>${marker('k', '#a6a198')}${marker('r', '#c7341f')}${marker('a', '#a8650b')}${marker('g', '#2c7a4b')}</defs>
+    ${heads}${edges}${cards}${labels}</svg>`;
+}
+
+// ---------------------------------------------------------------- cypher highlighting
+function highlight(src) {
+  return src.split('\n').map((line) => {
+    if (/^\s*\/\//.test(line)) return `<span class="cm">${esc(line)}</span>`;
+    let h = esc(line);
+    h = h.replace(/(&#39;[^&]*?&#39;)/g, '<span class="st">$1</span>');
+    h = h.replace(/\b(MATCH|OPTIONAL|WHERE|RETURN|WITH|UNWIND|CREATE|CALL|SEARCH|VECTOR|INDEX|FOR|LIMIT|ORDER BY|DESC|AND|OR|NOT|EXISTS|CASE|WHEN|THEN|ELSE|END|IN|AS|DISTINCT|SCORE|SHORTEST|null|IS)\b/g, '<span class="kw">$1</span>');
+    h = h.replace(/(\(\w*):(\w+)/g, '$1:<span class="lb">$2</span>');
+    h = h.replace(/\[(\w*):([A-Z_|]+)/g, '[$1:<span class="rt">$2</span>');
+    return h;
+  }).join('\n');
+}
+
+// ---------------------------------------------------------------- stage
+function renderStage(animate = true) {
+  const ex = explain(S.sel);
+  const inv = ex.inv;
+  const statusText = { exception: 'Exception', reconciled: 'Reconciled', matched: 'Matched · not yet due', overdue: 'Overdue' }[ex.status];
+  let findingsHtml = '';
+  if (!ex.findings.length) {
+    const msg = ex.status === 'reconciled'
+      ? ['Every link holds.', 'Ordered, received, billed, paid, cleared by the bank and reported by the supplier in GSTR-2B.']
+      : ['Matched. Nothing is broken.', `Ordered, received and billed agree. Due ${nice(inv.due)}, so no payment is expected yet.`];
+    findingsHtml = `<div class="ok-note"><b>${msg[0]}</b>${msg[1]}</div>`;
+    const fixed = [...S.linked.entries()].find(([, v]) => v.invoice === inv.id);
+    if (fixed) findingsHtml += fixedNote(fixed[0], fixed[1]);
+  }
+  for (const f of ex.findings) {
+    findingsHtml += `<article class="finding">
+      <div class="f-top"><span class="sev ${f.severity}">${f.severity.toUpperCase()}</span><span class="f-title">${esc(f.title)}</span><span class="f-amt">${inr(f.amount)}</span></div>
+      <h3 class="f-head">${rich(f.headline)}</h3>
+      <p class="f-detail">${rich(f.detail)}</p>
+      <div class="f-path"><span class="lbl">Evidence path</span>${(f.path || []).map((id) => `<span class="chip" data-id="${id}">${id}</span>`).join('<span class="arr">→</span>')}</div>
+      ${f.suggestion ? `<div class="fix"><div><p><b>Suggested fix:</b> ${rich(f.suggestion.text)}</p>
+        <small>Found by vector search over receipt item text (similarity ${f.suggestion.similarity}), kept only because the receipt is unlinked, from the same vendor, with the same quantity.</small></div>
+        <button class="btn" data-link="${f.suggestion.grn}|${f.suggestion.po}">Link ${f.suggestion.grn}</button></div>` : ''}
+    </article>`;
+  }
+  $('#stage').innerHTML = `
+    <div class="inv-head">
+      <div>
+        <div class="inv-kicker">Invoice · ${esc(inv.vendor_no)}</div>
+        <h1 class="inv-title">${inv.id} <span class="vn">${esc(inv.vendor)}</span></h1>
+        <div class="inv-meta">${inr(inv.total)}<span class="sep">/</span>dated ${nice(inv.date)}<span class="sep">/</span>due ${nice(inv.due)}<span class="sep">/</span>${inv.payments.length ? 'paid by ' + inv.payments.join(', ') : 'unpaid'}</div>
+      </div>
+      <div class="status ${ex.status}" id="status">${statusText}</div>
+    </div>
+    <div class="trail-wrap">
+      <div class="trail-cap"><span><b>The trail</b> · ${ex.nodes.length} nodes, ${ex.rels.length} relationships, walked in ${fmtMs(S.timings.trail)}</span>
+        <span class="legend"><span><i></i>link holds</span><span><i class="brk"></i>expected, not found</span><span><i class="sug"></i>suggested</span><span><i class="ok"></i>fixed</span></span></div>
+      <div class="trail-scroll">${renderTrail(ex, animate)}</div>
+    </div>
+    <div class="cols">
+      <section><h2 class="sec-h"><span>${ex.findings.length ? 'Where it breaks' : 'Result'}</span><span>${ex.findings.length ? ex.findings.length + ' finding' + (ex.findings.length > 1 ? 's' : '') : ''}</span></h2>${findingsHtml}</section>
+      <section id="side"></section>
+    </div>`;
+  renderSide(ex);
+}
+
+function fixedNote(grn, v) {
+  return `<div class="fixed-note"><b>Linked ${grn} → ${v.po}</b> in this tab, recorded on the relationship as
+    <code>{linked_by: 'browser', was_keyed_as: '${v.was}'}</code>. In the browser the change lives in memory; from the command line or an agent it is written to <code>store/trailmark.rl</code>.
+    <div style="margin-top:8px"><button class="btn ghostbtn" data-reset="1">Reset sample books</button></div></div>`;
+}
+
+const fmtMs = (ms) => (ms == null ? '—' : ms < 1 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(1)} ms`);
+
+const PRESETS = [
+  ['Who is linked to PAY-3410?', `MATCH path = (p:Payment {id: 'PAY-3410'})
+      ((a)-[:PAID_TO|HAS_ACCOUNT|NEW_ACCOUNT|ENTERED|APPROVED]-(b)){1,3}
+      (e:Employee)
+RETURN e.name AS person, [r IN relationships(path) | type(r)] AS route`],
+  ['Payments that left as several debits', `MATCH (p:Payment)<-[:CLEARS]-(b:BankLine)
+WITH p, collect(b.id) AS debits
+WHERE size(debits) > 1
+OPTIONAL MATCH (b2:BankLine)-[:CLEARS]->(p)
+OPTIONAL MATCH (r:BankLine)-[:REVERSES]->(b2)
+RETURN p.id, p.amount, debits, collect(r.id) AS returned`],
+  ['Receipts linked to no PO', `MATCH (g:GoodsReceipt)
+WHERE NOT EXISTS { (g)-[:RECEIVED_AGAINST]->() }
+RETURN g.id, g.po_ref AS keyed_as, g.item, g.qty`],
+  ['Invoices the supplier never reported', `MATCH (i:Invoice)-[:ISSUED_BY]->(v:Vendor)
+WHERE NOT EXISTS { (:GstrLine)-[:REPORTS]->(i) }
+RETURN i.id, v.name, i.gst AS credit_at_risk`],
+  ['One payment, many invoices', `MATCH (p:Payment)-[s:SETTLES]->(i:Invoice)
+WITH p, collect(i.id + ' ' + toString(s.amount)) AS settles
+WHERE size(settles) > 1
+RETURN p.id, p.amount, settles`],
+];
+
+function renderSide(ex) {
+  const side = $('#side');
+  const tabs = `<div class="tabs"><button class="tab ${S.tab === 'why' ? 'on' : ''}" data-tab="why">How the graph found it</button><button class="tab ${S.tab === 'ask' ? 'on' : ''}" data-tab="ask">Query the graph</button></div>`;
+  if (S.tab === 'why') {
+    const files = ex.findings.length ? [...new Set(ex.findings.map((f) => f.file))].map((f) => S.Q.checks.find((c) => c.file === f)) : [S.Q.trail];
+    side.innerHTML = tabs + files.map((c) => `
+      <p class="q-why">${esc(c.graph || c.plain)}</p>
+      <div class="q-file"><span>${c.file}</span><span>ran in ${fmtMs(S.timings[c.file] ?? S.timings.trail)} · Relate WebAssembly</span></div>
+      <pre class="cy">${highlight(c.text.split('\n').filter((l) => !/^\/\/\s*(title|plain|graph):/.test(l)).join('\n'))}</pre>`).join('<div style="height:18px"></div>');
+  } else {
+    side.innerHTML = tabs + `<div class="console">
+      <div class="presets">${PRESETS.map(([n], i) => `<button class="preset" data-preset="${i}">${esc(n)}</button>`).join('')}</div>
+      <textarea id="cq" spellcheck="false">${esc(S.lastQuery || PRESETS[0][1])}</textarea>
+      <div class="run-row"><button class="btn" id="runq">Run</button><span id="qmeta">Read-only is up to you here: this is an in-memory copy in your tab.</span></div>
+      <div id="qres"></div></div>`;
+    runConsole();
+  }
+}
+
+function runConsole() {
+  const ta = $('#cq'); if (!ta) return;
+  S.lastQuery = ta.value;
+  const out = $('#qres');
+  try {
+    const env = run(ta.value);
+    const cell = (v) => (v && typeof v === 'object' ? JSON.stringify(v, (k, x) => (k === 'item_vec' ? undefined : x)) : v ?? '');
+    $('#qmeta').textContent = `${env.rows.length} row${env.rows.length === 1 ? '' : 's'} · ${fmtMs(env.elapsed_ms)} in Relate (WebAssembly)`;
+    out.innerHTML = env.rows.length ? `<table class="res"><thead><tr>${env.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${env.rows.slice(0, 100).map((r) => `<tr>${env.columns.map((c) => `<td>${esc(cell(r[c]))}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="q-why">No rows.</p>';
+  } catch (e) {
+    $('#qmeta').textContent = 'error';
+    out.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------- actions
+function select(id, animate = true) {
+  if (!S.invoices.find((i) => i.id === id)) id = 'INV-1042';
+  S.sel = id;
+  if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
+  renderLedger();
+  renderStage(animate);
+}
+
+function linkReceipt(grn, po) {
+  const at = new Date().toISOString().slice(0, 19) + 'Z';
+  const env = run(S.Q.link_receipt.text, { grn, po, by: 'browser', note: 'linked from the trail view', at });
+  if (!env.rows.length) return;
+  const inv = S.sel;
+  S.linked.set(grn, { po, was: env.rows[0].was_keyed_as, invoice: inv });
+  scan();
+  renderLedger();
+  renderStage(false);
+  const st = $('#status'); st.animate([{ transform: 'scale(1.08)' }, { transform: 'none' }], { duration: 420, easing: 'ease-out' });
+}
+
+function reset() {
+  S.linked.clear();
+  loadGraph(); scan(); select(S.sel);
+}
+
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('[data-inv]'); if (row) return select(row.dataset.inv);
+  const l = e.target.closest('[data-link]'); if (l) { const [g, p] = l.dataset.link.split('|'); return linkReceipt(g, p); }
+  const t = e.target.closest('[data-tab]'); if (t) { S.tab = t.dataset.tab; return renderSide(explain(S.sel)); }
+  const p = e.target.closest('[data-preset]'); if (p) { $('#cq').value = PRESETS[+p.dataset.preset][1]; return runConsole(); }
+  if (e.target.closest('#runq')) return runConsole();
+  if (e.target.closest('[data-reset]')) return reset();
+});
+document.addEventListener('keydown', (e) => { if (e.target.id === 'cq' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runConsole(); });
+document.addEventListener('mouseover', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  document.querySelectorAll(`svg .card[data-id="${c.dataset.id}"]`).forEach((g) => g.classList.add('focus'));
+});
+document.addEventListener('mouseout', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  document.querySelectorAll(`svg .card[data-id="${c.dataset.id}"]`).forEach((g) => { if (g.dataset.id !== S.sel) g.classList.remove('focus'); });
+});
+window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== S.sel) select(id); });
+
+// ---------------------------------------------------------------- boot
+async function boot() {
+  const eng = $('#engine');
+  try {
+    const t0 = performance.now();
+    const [, graph, Q] = await Promise.all([init(), fetch('data/graph.json').then((r) => r.json()), fetch('data/queries.json').then((r) => r.json())]);
+    S.graph = graph; S.Q = Q;
+    const t1 = performance.now();
+    loadGraph();
+    scan();
+    const n = graph.nodes.reduce((a, g) => a + g.rows.length, 0), r = graph.rels.reduce((a, g) => a + g.rows.length, 0);
+    eng.classList.add('ready');
+    eng.innerHTML = `<span class="pulse"></span>Relate 1.0.1 · WebAssembly · <b>${n}</b> nodes · <b>${r}</b> relationships · rebuilt in ${Math.round(performance.now() - t1)} ms`;
+    select(location.hash.slice(1) || 'INV-1042');
+  } catch (err) {
+    console.error(err);
+    eng.classList.add('fail');
+    eng.innerHTML = '<span class="pulse"></span>Engine failed to start';
+    $('#stage').innerHTML = `<div class="loading"><p>Could not start the graph engine: <code>${esc(err.message)}</code></p><p>Open this page through <code>python -m trailmark view</code> (or the hosted demo), not as a file.</p></div>`;
+  }
+}
+boot();

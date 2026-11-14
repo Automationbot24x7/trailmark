@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "trailmark": {
+      "command": "python",
+      "args": ["-m", "trailmark", "mcp"]
+    },
+    "relate": {
+      "command": "relate",
+      "args": ["serve", "--database", "store/trailmark.rl", "--mcp", "stdio", "--read-only"]
+    }
+  }
+}
