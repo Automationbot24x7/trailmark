@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- Source of docs/trail-model.png: the Trailmark graph model and where each of the six checks looks. Render with headless Chrome at 1600x820, scale 2. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 1600px; height: 820px; background: #f6f4ef; }
+  svg { display: block; }
+  .t { font: 800 34px 'Inter Tight', sans-serif; fill: #141414; letter-spacing: -.02em; }
+  .s { font: 500 17px 'Inter Tight', sans-serif; fill: #3b3a37; }
+  .k { font: 600 12px 'JetBrains Mono', monospace; fill: #75716a; letter-spacing: .08em; }
+  .n { font: 700 21px 'JetBrains Mono', monospace; fill: #141414; }
+  .p { font: 500 13px 'JetBrains Mono', monospace; fill: #3b3a37; }
+  .r { font: 600 12.5px 'JetBrains Mono', monospace; fill: #141414; }
+  .card { fill: #fffdf9; stroke: #141414; stroke-width: 1.6; }
+  .e { fill: none; stroke: #141414; stroke-width: 1.8; }
+  .chip { fill: #f6f4ef; }
+  .b circle { fill: #c7341f; } .b text { font: 700 14px 'JetBrains Mono', monospace; fill: #fff; }
+  .lh { font: 700 13px 'JetBrains Mono', monospace; fill: #75716a; letter-spacing: .08em; }
+  .lt { font: 500 17px 'Inter Tight', sans-serif; fill: #141414; }
+  .lt tspan.d { fill: #75716a; }
+</style></head>
+<body>
+<svg width="1600" height="820" viewBox="0 0 1600 820" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#141414"/></marker></defs>
+
+  <text class="t" x="60" y="70">What connects to what</text>
+  <text class="s" x="60" y="100">One Relate file, store/trailmark.rl: 184 nodes and 265 relationships, linked by PO number, bank reference (UTR) and GSTIN + invoice number.</text>
+
+  <!-- edges (stored direction) -->
+  <path class="e" d="M985 210 C 985 105, 153 105, 153 210" marker-end="url(#a)" stroke-dasharray="4 4"/>
+  <path class="e" d="M880 210 C 880 150, 413 150, 413 210" marker-end="url(#a)"/>
+  <path class="e" d="M320 258 L248 258" marker-end="url(#a)"/>
+  <path class="e" d="M580 258 L508 258" marker-end="url(#a)"/>
+  <path class="e" d="M1100 258 L1028 258" marker-end="url(#a)"/>
+  <path class="e" d="M1360 258 L1288 258" marker-end="url(#a)"/>
+  <path class="e" d="M1546 240 C 1590 240, 1590 290, 1548 290" marker-end="url(#a)"/>
+  <path class="e" d="M933 440 L933 308" marker-end="url(#a)"/>
+  <path class="e" d="M1193 306 L1193 438" marker-end="url(#a)"/>
+  <path class="e" d="M1360 488 L1288 488" marker-end="url(#a)"/>
+  <path class="e" d="M1193 640 L1193 538" marker-end="url(#a)"/>
+  <path class="e" d="M1100 690 C 1060 690, 1068 300, 1100 292" marker-end="url(#a)"/>
+  <path class="e" d="M1286 690 C 1400 690, 1453 620, 1453 540" marker-end="url(#a)"/>
+  <path class="e" d="M153 306 L153 380 Q153 392 165 392 L1046 392 Q1058 392 1058 404 L1058 470 Q1058 482 1070 482 L1098 482" marker-end="url(#a)"/>
+
+  <!-- relationship labels -->
+  <g>
+    <rect class="chip" x="616" y="141" width="56" height="20"/><text class="r" x="644" y="156" text-anchor="middle">BILLS</text>
+    <rect class="chip" x="520" y="104" width="92" height="20"/><text class="r" x="566" y="119" text-anchor="middle">ISSUED_BY</text>
+    <text class="r" x="283" y="243" text-anchor="middle">PLACED_</text><text class="r" x="283" y="280" text-anchor="middle">WITH</text>
+    <text class="r" x="543" y="243" text-anchor="middle">RECEIVED_</text><text class="r" x="543" y="280" text-anchor="middle">AGAINST</text>
+    <text class="r" x="1063" y="243" text-anchor="middle">SETTLES</text><text class="r" x="1063" y="280" text-anchor="middle">{amount}</text>
+    <text class="r" x="1323" y="243" text-anchor="middle">CLEARS</text>
+    <text class="r" x="1510" y="322">REVERSES</text>
+    <text class="r" x="943" y="365">REPORTS</text>
+    <text class="r" x="1203" y="370">PAID_TO</text>
+    <text class="r" x="1323" y="476" text-anchor="middle">NEW_</text><text class="r" x="1323" y="512" text-anchor="middle">ACCOUNT</text>
+    <text class="r" x="1203" y="595">HAS_ACCOUNT</text>
+    <text class="r" x="1012" y="580">APPROVED</text>
+    <text class="r" x="1462" y="610">ENTERED</text>
+    <rect class="chip" x="560" y="382" width="180" height="20"/><text class="r" x="650" y="397" text-anchor="middle">HAS_ACCOUNT {since}</text>
+  </g>
+
+  <!-- cards -->
+  <g><rect class="card" x="60" y="210" width="186" height="96"/><text class="k" x="76" y="234">VENDOR</text><text class="n" x="76" y="262">Vendor</text><text class="p" x="76" y="288">name · gstin</text></g>
+  <g><rect class="card" x="320" y="210" width="186" height="96"/><text class="k" x="336" y="234">PURCHASE ORDER</text><text class="n" x="336" y="262">PurchaseOrder</text><text class="p" x="336" y="288">qty · item · total</text></g>
+  <g><rect class="card" x="580" y="210" width="186" height="96"/><text class="k" x="596" y="234">GOODS RECEIPT</text><text class="n" x="596" y="262">GoodsReceipt</text><text class="p" x="596" y="288">qty · po_ref · vec</text></g>
+  <g><rect class="card" x="840" y="210" width="186" height="96" style="stroke-width:2.6"/><text class="k" x="856" y="234">INVOICE</text><text class="n" x="856" y="262">Invoice</text><text class="p" x="856" y="288">inv_no · total · itc</text></g>
+  <g><rect class="card" x="1100" y="210" width="186" height="96"/><text class="k" x="1116" y="234">PAYMENT</text><text class="n" x="1116" y="262">Payment</text><text class="p" x="1116" y="288">amount · utr</text></g>
+  <g><rect class="card" x="1360" y="210" width="186" height="96"/><text class="k" x="1376" y="234">BANK STATEMENT</text><text class="n" x="1376" y="262">BankLine</text><text class="p" x="1376" y="288">debit/credit · utr</text></g>
+  <g><rect class="card" x="840" y="440" width="186" height="96"/><text class="k" x="856" y="464">OUR GSTR-2B</text><text class="n" x="856" y="492">GstrLine</text><text class="p" x="856" y="518">gstin · inv_no · tax</text></g>
+  <g><rect class="card" x="1100" y="440" width="186" height="96"/><text class="k" x="1116" y="464">PAID TO ACCOUNT</text><text class="n" x="1116" y="492">BankAccount</text><text class="p" x="1116" y="518">bank · last4</text></g>
+  <g><rect class="card" x="1360" y="440" width="186" height="96"/><text class="k" x="1376" y="464">BANK DETAIL CHANGE</text><text class="n" x="1376" y="492">BankChange</text><text class="p" x="1376" y="518">date · reason</text></g>
+  <g><rect class="card" x="1100" y="640" width="186" height="96"/><text class="k" x="1116" y="664">OUR PEOPLE</text><text class="n" x="1116" y="692">Employee</text><text class="p" x="1116" y="718">name · role</text></g>
+
+  <!-- where each check looks -->
+  <g class="b"><circle cx="766" cy="210" r="12"/><text x="766" y="215" text-anchor="middle">1</text></g>
+  <g class="b"><circle cx="506" cy="210" r="12"/><text x="506" y="215" text-anchor="middle">2</text></g>
+  <g class="b"><circle cx="1546" cy="210" r="12"/><text x="1546" y="215" text-anchor="middle">3</text></g>
+  <g class="b"><circle cx="1026" cy="210" r="12"/><text x="1026" y="215" text-anchor="middle">4</text></g>
+  <g class="b"><circle cx="1026" cy="440" r="12"/><text x="1026" y="445" text-anchor="middle">5</text></g>
+  <g class="b"><circle cx="1286" cy="640" r="12"/><text x="1286" y="645" text-anchor="middle">6</text></g>
+
+  <!-- legend -->
+  <text class="lh" x="60" y="472">THE SIX CHECKS · EACH A PLAIN .CYPHER FILE</text>
+  <line x1="60" x2="780" y1="484" y2="484" stroke="#141414" stroke-width="1.5"/>
+  <g class="lt">
+    <g class="b"><circle cx="72" cy="514" r="12"/><text x="72" y="519" text-anchor="middle">1</text></g><text x="96" y="520">Invoice has no goods receipt <tspan class="d">· vector search finds the mis-keyed one</tspan></text>
+    <g class="b"><circle cx="72" cy="550" r="12"/><text x="72" y="555" text-anchor="middle">2</text></g><text x="96" y="556">Billed more than received <tspan class="d">· sums every receipt and invoice on a PO</tspan></text>
+    <g class="b"><circle cx="72" cy="586" r="12"/><text x="72" y="591" text-anchor="middle">3</text></g><text x="96" y="592">Marked paid, money came back <tspan class="d">· follows CLEARS, then REVERSES</tspan></text>
+    <g class="b"><circle cx="72" cy="622" r="12"/><text x="72" y="627" text-anchor="middle">4</text></g><text x="96" y="628">Same invoice paid twice <tspan class="d">· two invoices, one number, one PO</tspan></text>
+    <g class="b"><circle cx="72" cy="658" r="12"/><text x="72" y="663" text-anchor="middle">5</text></g><text x="96" y="664">GST credit, supplier never filed <tspan class="d">· no REPORTS from our GSTR-2B</tspan></text>
+    <g class="b"><circle cx="72" cy="694" r="12"/><text x="72" y="699" text-anchor="middle">6</text></g><text x="96" y="700">Payment to a just-changed, employee-owned account <tspan class="d">· 1–3 hop paths</tspan></text>
+  </g>
+  <text class="s" x="60" y="770" style="font-size:14px;fill:#75716a">Arrows show the stored direction. Dashed: ISSUED_BY, kept for lookups; the trail reaches the vendor through the PO.</text>
+</svg>
+</body></html>

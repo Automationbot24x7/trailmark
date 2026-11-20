@@ -27,6 +27,10 @@ The other 20 invoices reconcile, so the checks are quiet when nothing is wrong. 
 
 ## What connects to what
 
+![The Trailmark graph: Vendor, PurchaseOrder, GoodsReceipt, Invoice, Payment and BankLine in a row, GstrLine, BankAccount, BankChange and Employee below, with the relationships between them and markers for where each of the six checks looks](docs/trail-model.png)
+
+<details><summary>The same model as a Mermaid chart</summary>
+
 ```mermaid
 flowchart LR
   PO[PurchaseOrder] -- PLACED_WITH --> V[Vendor]
@@ -44,6 +48,8 @@ flowchart LR
   E -- ENTERED --> BC[BankChange]
   BC -- NEW_ACCOUNT --> BA
 ```
+
+</details>
 
 184 nodes and 265 relationships. The builder infers the links from flat CSV ledgers using the keys an accountant would use: PO number, bank reference (UTR), GSTIN plus invoice number. See [`cypher/link.cypher`](cypher/link.cypher). A receipt counts against a PO only if the PO number it was keyed with exists, which is how scenario 1 arises.
 
