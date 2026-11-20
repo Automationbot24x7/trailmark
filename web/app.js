@@ -228,7 +228,7 @@ function fit(cls, x, y, s, n) {
 function renderTrail(ex, animate) {
   const L = layout(ex);
   LAST = L;
-  let edges = '', labels = '', cards = '', heads = '';
+  let edges = '', flows = '', labels = '', cards = '', heads = '';
   LANES.forEach(([, name], c) => {
     const x = PADX + c * (W + GX);
     heads += `<text class="lane-h" x="${x}" y="24">${name}</text>`;
@@ -242,7 +242,7 @@ function renderTrail(ex, animate) {
     if (Object.values(L.pos).some((p) => p.it.label === label)) return;
     const x = PADX + c * (W + GX), y = L.rowY[0];
     const note = (label === 'Payment' || label === 'BankLine') && ex.inv.due > S.Q.as_of ? `none yet · due ${nice(ex.inv.due)}` : 'none';
-    cards += `<g class="card dim"><rect class="box" x="${x}" y="${y}" width="${W}" height="${H}" style="stroke-dasharray:2 3"/><text class="l2" x="${x + 12}" y="${y + 42}">${note}</text></g>`;
+    cards += `<g class="card dim wait"><rect class="box" x="${x}" y="${y}" width="${W}" height="${H}" style="stroke-dasharray:2 3"/><text class="l2" x="${x + 12}" y="${y + 42}">${note}</text></g>`;
   });
   let k = 0;
   const edge = (a, b, cls, label, delay) => {
@@ -250,6 +250,7 @@ function renderTrail(ex, animate) {
     const len = 400, n = k++;
     const mk = `url(#arr-${cls.includes('brk') ? 'r' : cls.includes('sug') ? 'a' : cls.includes('fixed') ? 'g' : cls.includes('high') ? 'r' : 'k'})`;
     edges += `<path class="edge ${cls}${animate ? ' draw' : ''}" d="${p.d}" data-a="${a.it.id}" data-b="${b.it.id}" data-t="${esc(label || '')}" data-k="${n}" style="--len:${len};animation-delay:${delay}ms" ${p.rev ? 'marker-start' : 'marker-end'}="${mk}"><title>${esc(label || '')}</title></path>`;
+    if (!cls.includes('brk')) flows += `<path class="flow ${cls}${p.rev ? ' rev' : ''}" d="${p.d}" data-k="${n}" style="animation-delay:-${(n * 370) % 1600}ms"/>`;
     if (!label) return;
     labels += `<g class="elab ${cls}" data-k="${n}">${labelSvg(p, label, cls)}</g>`;
   };
@@ -304,7 +305,7 @@ function renderTrail(ex, animate) {
       <filter id="lift" x="-12%" y="-15%" width="124%" height="150%"><feDropShadow dx="0" dy="1" stdDeviation=".8" flood-color="#3b2a1a" flood-opacity=".22"/><feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#3b2a1a" flood-opacity=".11"/></filter>
       <filter id="lift-hi" x="-20%" y="-25%" width="140%" height="180%"><feDropShadow dx="0" dy="2" stdDeviation="1.4" flood-color="#3b2a1a" flood-opacity=".22"/><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#3b2a1a" flood-opacity=".2"/></filter>
       <filter id="hole" x="0" y="0" width="100%" height="100%"><feFlood flood-color="#5a1a10" flood-opacity=".42"/><feComposite in2="SourceAlpha" operator="out"/><feGaussianBlur stdDeviation="3.2"/><feOffset dx="0" dy="2.5" result="s"/><feComposite in="s" in2="SourceAlpha" operator="in" result="in"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="in"/></feMerge></filter></defs>
-    ${heads}<g class="edges">${edges}</g><g class="cards">${cards}</g><g class="labels">${labels}</g>
+    ${heads}<g class="edges">${edges}</g><g class="flows">${flows}</g><g class="cards">${cards}</g><g class="labels">${labels}</g>
     <g class="walker" opacity="0"><circle class="w-halo" r="11"/><circle class="w-dot" r="4.5"/></g></svg>`;
 }
 
@@ -340,7 +341,7 @@ function walkSteps(ex) {
   }
   return steps;
 }
-function walk(ex) {
+function walk(ex, quiet = false) {
   const svg = $('svg.trail'), log = $('#walk-log'); if (!svg || !log) return;
   const my = ++WALK, steps = walkSteps(ex);
   const w = svg.querySelector('.walker');
@@ -357,7 +358,7 @@ function walk(ex) {
   let i = 0;
   const next = () => {
     if (my !== WALK) return;
-    if (i >= steps.length) { w.setAttribute('opacity', '0'); return; }
+    if (i >= steps.length) { w.setAttribute('opacity', '0'); return again(); }
     const [a, b, miss] = steps[i++];
     const el = pathFor(a, b), A = centre(a), B = centre(b);
     if (!A || !B) return next();
@@ -376,12 +377,13 @@ function walk(ex) {
       const pt = at(e); w.setAttribute('transform', `translate(${pt.x} ${pt.y})`); w.setAttribute('opacity', '1');
       if (t < 1) return requestAnimationFrame(tick);
       addHop(log, a, b, miss, el);
-      if (miss) { hit(b, 'miss-hit'); w.setAttribute('opacity', '0'); return; }
+      if (miss) { hit(b, 'miss-hit'); w.setAttribute('opacity', '0'); return again(); }
       hit(b); setTimeout(next, 160);
     };
     requestAnimationFrame(tick);
   };
-  setTimeout(next, 700);
+  const again = () => setTimeout(() => { if (my === WALK && document.contains(log)) walk(ex, true); }, 3200);
+  setTimeout(next, quiet ? 200 : 700);
 }
 function addHop(log, a, b, miss, el) {
   const last = log.querySelector('.hop:last-child .chip')?.dataset.id;
@@ -403,6 +405,7 @@ function lightUp(id) {
   svg.querySelectorAll('.edge').forEach((e) => {
     if (e.dataset.a !== id && e.dataset.b !== id) return;
     e.classList.add('lit'); near.add(e.dataset.a); near.add(e.dataset.b);
+    svg.querySelector(`.flow[data-k="${e.dataset.k}"]`)?.classList.add('lit');
     svg.querySelector(`.elab[data-k="${e.dataset.k}"]`)?.classList.add('lit');
   });
   near.forEach((n) => svg.querySelector(`.card[data-id="${n}"]`)?.classList.add('lit'));
@@ -415,6 +418,8 @@ function reroute(svg, id) {
     if (e.dataset.a !== id && e.dataset.b !== id) return;
     const p = edgePath(LAST.pos[e.dataset.a], LAST.pos[e.dataset.b]); if (!p) return;
     e.setAttribute('d', p.d);
+    const fl = svg.querySelector(`.flow[data-k="${e.dataset.k}"]`);
+    if (fl) { fl.setAttribute('d', p.d); fl.classList.toggle('rev', !!p.rev); }
     e.removeAttribute('marker-start'); e.removeAttribute('marker-end');
     e.setAttribute(p.rev ? 'marker-start' : 'marker-end', `url(#arr-${e.classList.contains('brk') || e.classList.contains('high') ? 'r' : e.classList.contains('sug') ? 'a' : e.classList.contains('fixed') ? 'g' : 'k'})`);
     const lab = svg.querySelector(`.elab[data-k="${e.dataset.k}"]`);
@@ -629,6 +634,14 @@ document.addEventListener('mouseout', (e) => {
 window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== S.sel) select(id); });
 
 // ---------------------------------------------------------------- boot
+// the intro plays at least once through, then leaves as soon as the graph is ready (?nointro skips it, for recordings)
+const INTRO_T0 = performance.now();
+if (new URLSearchParams(location.search).has('nointro')) document.documentElement.classList.add('no-intro');
+function introDone() {
+  const el = $('#intro'); if (!el) return;
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 500); }, Math.max(0, 1900 - (performance.now() - INTRO_T0)));
+}
+
 async function boot() {
   const eng = $('#engine');
   try {
@@ -641,11 +654,13 @@ async function boot() {
     const n = graph.nodes.reduce((a, g) => a + g.rows.length, 0), r = graph.rels.reduce((a, g) => a + g.rows.length, 0);
     eng.classList.add('ready');
     eng.innerHTML = `<span class="pulse"></span>Relate 1.0.1 · WebAssembly · <b>${n}</b> nodes · <b>${r}</b> rels · built in ${Math.round(performance.now() - t1)} ms`;
+    introDone();
     select(location.hash.slice(1) || 'INV-1042');
     const ap = new URLSearchParams(location.search).get('apply');
     if (ap) { const [g, p] = ap.split(','); linkReceipt(g, p); }
   } catch (err) {
     console.error(err);
+    introDone();
     eng.classList.add('fail');
     eng.innerHTML = '<span class="pulse"></span>Engine failed to start';
     $('#stage').innerHTML = `<div class="loading"><p>Could not start the graph engine: <code>${esc(err.message)}</code></p><p>Open this page through <code>python -m trailmark view</code> (or the hosted demo), not as a file.</p></div>`;
