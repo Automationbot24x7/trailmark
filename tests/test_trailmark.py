@@ -29,6 +29,10 @@ EXPECTED = {
 }
 
 
+# the same rule the browser uses to offer the "cut this link" experiment
+CUTTABLE = (ROOT / "cypher" / "cuttable.cypher").read_text(encoding="utf-8")
+
+
 class TrailmarkTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -94,6 +98,29 @@ class TrailmarkTest(unittest.TestCase):
         self.assertEqual(sum(len(g["rows"]) for g in data["nodes"]), 184)
         q = json.loads((TMP / "queries.json").read_text(encoding="utf-8"))
         self.assertEqual(len(q["checks"]), 6)
+
+    def test_8_every_cut_receipt_link_is_caught_once(self):
+        """The browser's "cut this link" experiment: on every clean invoice whose PO has one receipt,
+        deleting that RECEIVED_AGAINST link must raise exactly one new finding (missing receipt, for that
+        invoice, suggesting the same receipt back) and leave every other finding as it was."""
+        base = {f["invoice"]: f["check"] for f in checks.scan()}
+        with graph.open_store() as db:
+            eligible = [e for e in graph.run(db, CUTTABLE) if e["inv"] not in base]
+        self.assertGreaterEqual(len(eligible), 15)
+        for e in eligible:
+            with self.subTest(invoice=e["inv"]), graph.open_store() as db:
+                graph.run(db, "MATCH (:GoodsReceipt {id: $g})-[r:RECEIVED_AGAINST]->(:PurchaseOrder {id: $p}) DELETE r", {"g": e["grn"], "p": e["po"]})
+                try:
+                    got = {}
+                    for f in checks.scan(db):
+                        got.setdefault(f["invoice"], []).append(f)
+                    new = got.pop(e["inv"], [])
+                    self.assertEqual([f["check"] for f in new], ["missing-receipt"])
+                    self.assertEqual(new[0]["amount"], e["total"])
+                    self.assertEqual(new[0]["suggestion"]["grn"], e["grn"])
+                    self.assertEqual({k: [f["check"] for f in v] for k, v in got.items()}, {k: [c] for k, c in base.items()})
+                finally:
+                    graph.run(db, "MATCH (g:GoodsReceipt {id: $g}), (p:PurchaseOrder {id: $p}) CREATE (g)-[:RECEIVED_AGAINST]->(p)", {"g": e["grn"], "p": e["po"]})
 
 
 if __name__ == "__main__":

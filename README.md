@@ -10,6 +10,17 @@
 
 > **Sample data.** Every vendor, person, GSTIN, bank account and amount in this repo is invented. GSTINs carry `SAMPL` in the PAN slot and IFSC codes start with `SMPL`, so nothing can be mistaken for a real registration or account.
 
+## Try to break it
+
+Open any reconciled invoice in the live demo (or press **Break the books**) and cut its receipt link with the scissors. The link is removed from the Relate graph in your tab with a real `DELETE`, all six checks run again in a few milliseconds, and the invoice becomes an exception with the same receipt offered back as the fix. The test suite does the same for all 19 such invoices on every push: each cut is caught exactly once and nothing else changes ([`cypher/cuttable.cypher`](cypher/cuttable.cypher) picks them, `test_8` in [`tests/test_trailmark.py`](tests/test_trailmark.py) checks them).
+
+## Why a graph, not six SQL joins
+
+- **Check 3** follows a chain of bank reversals with a quantified path pattern (`{1,3}`); in SQL that is a recursive query.
+- **Check 6** looks at every 1 to 3 hop path from a payment to any employee over five relationship types at once: who approved it, who entered the new bank details, who owns the receiving account.
+- **Check 1** runs a vector search and graph rules in one statement. On `INV-1042` the text match scores `GRN-5404` highest (1.00), and the graph rules it out because it is already received against `PO-7604`; the app draws that ruled-out receipt struck through, next to the PO it belongs to.
+- **One file holds it all:** `store/trailmark.rl` is committed. The browser, the CLI and the AI-agent server run the same `.cypher` files against it, and a fix made from the CLI or an agent is written into it with who made it and why.
+
 ## Use case
 
 At month end, an accounts-payable team ties out every invoice: was it ordered, was it received, was it paid, did the money really leave the bank, did the supplier report it for GST? Each answer sits in a different ledger. When something does not tie, someone opens five spreadsheets and follows the trail by hand.

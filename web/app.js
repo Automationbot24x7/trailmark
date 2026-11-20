@@ -6,7 +6,7 @@ import init, { RelateDb } from './vendor/relate-wasm/relate.js';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const S = { db: null, graph: null, Q: null, findings: [], invoices: [], states: {}, sel: null, tab: 'why', linked: new Map(), timings: {} };
+const S = { db: null, graph: null, Q: null, findings: [], invoices: [], states: {}, sel: null, tab: 'why', linked: new Map(), timings: {}, cuttable: new Map(), cuts: [] };
 
 // ---------------------------------------------------------------- engine
 function run(cypher, params) {
@@ -51,11 +51,18 @@ function scan() {
 function explain(id) {
   const inv = S.invoices.find((i) => i.id === id);
   const found = S.findings.filter((f) => f.invoice === id);
-  const extra = [...new Set(found.flatMap((f) => [...(f.path || []), ...(f.suggestion ? [f.suggestion.grn] : [])]))];
+  // receipts the vector search liked but the graph ruled out, e.g. "GRN-5404 (1.00, already received against PO-7604)"
+  const rejected = {};
+  for (const f of found) for (const r of f.suggestion?.rejected || []) {
+    const m = r.match(/^(\S+) \(([\d.]+)(?:, already received against ([^)\s]+))?/);
+    if (m) rejected[m[1]] = { score: m[2], po: m[3] || null, text: r };
+  }
+  const extra = [...new Set(found.flatMap((f) => [...(f.path || []), ...(f.suggestion ? [f.suggestion.grn] : [])])
+    .concat(Object.entries(rejected).flatMap(([g, r]) => (r.po ? [g, r.po] : [g]))))];
   const env = run(S.Q.trail.text, { id, extra });
   S.timings.trail = env.elapsed_ms;
   const t = env.rows[0];
-  return { inv, status: S.states[id], findings: found, nodes: t.nodes, rels: t.rels.filter(Boolean) };
+  return { inv, status: S.states[id], findings: found, nodes: t.nodes, rels: t.rels.filter(Boolean), rejected };
 }
 
 // ---------------------------------------------------------------- formatting
@@ -117,6 +124,12 @@ const SLOT = { Vendor: [0, 0], PurchaseOrder: [1, 0], GoodsReceipt: [2, 0], Invo
   GstrLine: [3, 1], BankAccount: [4, 1], BankChange: [5, 1], Employee: [5, 2] };
 const KIND = { Vendor: 'Vendor', PurchaseOrder: 'Purchase order', GoodsReceipt: 'Goods receipt', Invoice: 'Invoice', Payment: 'Payment',
   BankLine: 'Bank line', GstrLine: 'Our GSTR-2B', BankAccount: 'Paid to account', BankChange: 'Bank detail change', Employee: 'Employee' };
+// plain words for the Indian terms, shown on hover
+const GLOSS = {
+  GstrLine: "GSTR-2B: the government's monthly statement of the purchases our suppliers reported. GST input credit can be claimed only on invoices that appear in it.",
+  Payment: 'UTR: the unique transaction reference every Indian bank transfer carries; it ties our payment to the bank statement line.',
+  BankLine: 'A line on our bank statement, matched to the payment by its UTR (unique transaction reference).',
+};
 const W = 172, H = 74, GX = 66, PADX = 22, TOP = 72, VG = 14, BAND = 52, RIGHT = 74;
 
 function lines(n) {
@@ -288,15 +301,18 @@ function renderTrail(ex, animate) {
     const [l1, l2] = lines(it);
     const isCand = L.sugg.some((s) => s.grn === it.id);
     const isFixed = S.linked.has(it.id);
+    const rej = ex.rejected?.[it.id];
     const ev = L.ev.has(it.id);
-    const cls = ['card', isFixed ? 'fixed' : isCand ? 'cand' : '', ev && !isFixed ? 'ev' : '', ev && L.high ? 'high' : '', it.id === ex.inv.id ? 'focus' : '', animate ? 'appear' : ''].join(' ');
-    const kind = isCand ? 'Candidate receipt' : isFixed ? 'Receipt · linked now' : KIND[it.label];
-    cards += `<g class="${cls}" style="animation-delay:${delay}ms" data-id="${it.id}">
+    const cls = ['card', isFixed ? 'fixed' : isCand ? 'cand' : rej ? 'rej' : '', ev && !isFixed ? 'ev' : '', ev && L.high ? 'high' : '', it.id === ex.inv.id ? 'focus' : '', animate ? 'appear' : ''].join(' ');
+    const kind = isCand ? 'Candidate receipt' : isFixed ? 'Receipt · linked now' : rej ? `Ruled out · text score ${rej.score}` : KIND[it.label];
+    const l2b = rej ? (rej.po ? `already received against ${rej.po}` : 'different quantity') : l2;
+    const tip = rej ? rej.text : GLOSS[it.label];
+    cards += `<g class="${cls}" style="animation-delay:${delay}ms" data-id="${it.id}">${tip ? `<title>${esc(tip)}</title>` : ''}
       <rect class="box" x="${x}" y="${y}" width="${W}" height="${H}"/>
       <text class="k" x="${x + 12}" y="${y + 18}">${esc(kind)}</text>
-      <text class="i" x="${x + 12}" y="${y + 37}">${esc(it.id)}</text>
+      <text class="i" x="${x + 12}" y="${y + 37}">${esc(it.id)}</text>${rej ? `<line class="strike" x1="${x + 10}" x2="${x + 14 + it.id.length * 8.9}" y1="${y + 32}" y2="${y + 32}"/>` : ''}
       ${fit('l1', x + 12, y + 54, l1, 23)}
-      ${fit('l2', x + 12, y + 68, l2, 26)}
+      ${fit('l2', x + 12, y + 68, l2b, 26)}
       ${ev && !isFixed ? `<rect class="flag" x="${x + W - 10}" y="${y}" width="10" height="10"/>` : ''}</g>`;
   }
   const marker = (id, color) => `<marker id="arr-${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="${color}"/></marker>`;
@@ -306,7 +322,58 @@ function renderTrail(ex, animate) {
       <filter id="lift-hi" x="-20%" y="-25%" width="140%" height="180%"><feDropShadow dx="0" dy="2" stdDeviation="1.4" flood-color="#3b2a1a" flood-opacity=".22"/><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#3b2a1a" flood-opacity=".2"/></filter>
       <filter id="hole" x="0" y="0" width="100%" height="100%"><feFlood flood-color="#5a1a10" flood-opacity=".42"/><feComposite in2="SourceAlpha" operator="out"/><feGaussianBlur stdDeviation="3.2"/><feOffset dx="0" dy="2.5" result="s"/><feComposite in="s" in2="SourceAlpha" operator="in" result="in"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="in"/></feMerge></filter></defs>
     ${heads}<g class="edges">${edges}</g><g class="flows">${flows}</g><g class="cards">${cards}</g><g class="labels">${labels}</g>
-    <g class="walker" opacity="0"><circle class="w-halo" r="11"/><circle class="w-dot" r="4.5"/></g></svg>`;
+    <g class="hops"></g><g class="walker" opacity="0"><circle class="w-halo" r="11"/><circle class="w-dot" r="4.5"/></g>${cutButton(ex)}</svg>`;
+}
+
+// ---------------------------------------------------------------- cut a receipt link: the judge tests the checks
+const SCISSORS = '<path d="M-3.2 3.6 L4.6 -6.4 M3.2 3.6 L-4.6 -6.4"/><circle cx="-4.2" cy="5.2" r="2.4"/><circle cx="4.2" cy="5.2" r="2.4"/>';
+const cutFor = (id) => (S.states[id] !== 'exception' ? S.cuttable.get(id) : null);
+function cutButton(ex) {
+  const c = cutFor(ex.inv.id); if (!c || !LAST.pos[c.grn] || !LAST.pos[c.po]) return '';
+  return `<g class="cutbtn" data-cut="${c.grn}|${c.po}" role="button" aria-label="Cut the link ${c.grn} to ${c.po}" opacity="0"><title>Cut this link and re-run the checks</title><circle class="cb-ring" r="13"/><circle class="cb" r="13"/><g class="cb-ico">${SCISSORS}</g></g>`;
+}
+function placeCut(svg) {
+  const b = svg?.querySelector('.cutbtn'); if (!b) return;
+  const [g, po] = b.dataset.cut.split('|');
+  const e = [...svg.querySelectorAll('.edge')].find((x) => (x.dataset.a === g && x.dataset.b === po) || (x.dataset.a === po && x.dataset.b === g));
+  if (!e) return b.remove();
+  const pt = e.getPointAtLength(e.getTotalLength() / 2);
+  b.setAttribute('transform', `translate(${pt.x} ${pt.y})`); b.setAttribute('opacity', '1');
+}
+function cutLink(grn, po) {
+  const inv = S.sel, svg = $('svg.trail');
+  const before = { n: Object.values(S.states).filter((x) => x === 'exception').length, risk: S.findings.reduce((a, f) => a + Number(f.amount || 0), 0) };
+  WALK++;
+  const e = svg && [...svg.querySelectorAll('.edge')].find((x) => (x.dataset.a === grn && x.dataset.b === po) || (x.dataset.a === po && x.dataset.b === grn));
+  if (e && !reduced()) { e.classList.add('snap'); svg.querySelector(`.flow[data-k="${e.dataset.k}"]`)?.remove(); svg.querySelector('.cutbtn')?.classList.add('cutting'); }
+  setTimeout(() => {
+    const t0 = performance.now();
+    run('MATCH (:GoodsReceipt {id: $g})-[r:RECEIVED_AGAINST]->(:PurchaseOrder {id: $p}) DELETE r', { g: grn, p: po });
+    scan();
+    const ms = performance.now() - t0;
+    S.linked.delete(grn);
+    S.cuts.push({ grn, po, inv, ms, before });
+    renderLedger();
+    renderStage(true);
+    document.querySelector(`.row[data-inv="${inv}"]`)?.animate([{ background: 'var(--red-bg)' }, { background: 'transparent' }], { duration: 1400, easing: 'ease-out' });
+  }, reduced() ? 0 : 560);
+}
+function cutNote() {
+  const c = S.cuts[S.cuts.length - 1]; if (!c) return '';
+  const n = Object.values(S.states).filter((x) => x === 'exception').length;
+  const risk = S.findings.reduce((a, f) => a + Number(f.amount || 0), 0);
+  const caught = S.findings.some((f) => f.invoice === c.inv && f.check === 'missing-receipt');
+  return `<div class="cut-note"><span class="cn-ico"><svg viewBox="-9 -9 18 18" aria-hidden="true">${SCISSORS}</svg></span>
+    <p><b>You cut ${c.grn} → ${c.po}</b> with a real <code>DELETE</code> in the graph in this tab. The six checks re-ran in ${fmtMs(c.ms)}
+    ${caught ? `and caught it: <b>${n}</b> exceptions (was ${c.before.n}), <b>${inr(risk)}</b> at risk (+${inr(risk - c.before.risk)}).` : `: ${n} exceptions, ${inr(risk)} at risk.`}
+    ${S.sel !== c.inv ? `<a href="#${c.inv}">See ${c.inv}</a>.` : ''}</p>
+    <button class="btn ghostbtn" data-reset="1">Restore sample books</button></div>`;
+}
+function breakTheBooks() {
+  const pick = [...S.cuttable.keys()].find((id) => S.states[id] === 'reconciled' && id !== S.sel) || [...S.cuttable.keys()].find((id) => cutFor(id));
+  if (!pick) return;
+  select(pick);
+  const b = $('svg.trail .cutbtn'); if (b) { b.classList.add('invite'); b.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); }
 }
 
 // ---------------------------------------------------------------- live trail: walk, hover, drag
@@ -349,6 +416,7 @@ function walk(ex, quiet = false) {
   const card = (id) => svg.querySelector(`.card[data-id="${id}"]`);
   const hit = (id, cls = 'hit') => { const c = card(id); if (!c) return; c.classList.remove(cls); void c.getBBox(); c.classList.add(cls); };
   const pathFor = (a, b) => [...svg.querySelectorAll('.edge')].find((e) => (e.dataset.a === a && e.dataset.b === b) || (e.dataset.a === b && e.dataset.b === a));
+  svg.querySelector('.hops')?.replaceChildren();
   log.innerHTML = `<span class="wl-h">Walk</span><span class="hop"><b class="chip" data-id="${steps[0]?.[0] || ex.inv.id}">${steps[0]?.[0] || ex.inv.id}</b></span>`;
   if (!steps.length) return;
   if (reduced()) { // no motion: write the whole walk at once
@@ -385,7 +453,16 @@ function walk(ex, quiet = false) {
   const again = () => setTimeout(() => { if (my === WALK && document.contains(log)) walk(ex, true); }, 3200);
   setTimeout(next, quiet ? 200 : 700);
 }
+function hopBadge(el, a, b) {
+  const svg = $('svg.trail'), layer = svg?.querySelector('.hops'); if (!layer) return;
+  let pt;
+  if (el) pt = el.getPointAtLength(el.getTotalLength() / 2);
+  else { const A = LAST.pos[a], B = LAST.pos[b]; if (!A || !B) return; pt = { x: (A.x + B.x + W) / 2, y: (A.y + B.y + H) / 2 }; }
+  const n = layer.children.length + 1;
+  layer.insertAdjacentHTML('beforeend', `<g class="hopn${!el || el.classList.contains('brk') ? ' miss' : ''}" transform="translate(${pt.x} ${pt.y})"><circle r="8.5"/><text y="3.6" text-anchor="middle">${n}</text></g>`);
+}
 function addHop(log, a, b, miss, el) {
+  hopBadge(el, a, b);
   const last = log.querySelector('.hop:last-child .chip')?.dataset.id;
   if (last && last !== a) log.insertAdjacentHTML('beforeend', `<span class="hop"><i class="r">·</i><b class="chip" data-id="${a}">${a}</b></span>`);
   const t = el?.dataset.t || '';
@@ -425,11 +502,13 @@ function reroute(svg, id) {
     const lab = svg.querySelector(`.elab[data-k="${e.dataset.k}"]`);
     if (lab) lab.innerHTML = labelSvg(p, e.dataset.t, [...e.classList].filter((c) => ['ev', 'high', 'brk', 'sug', 'fixed'].includes(c)).join(' '));
   });
+  placeCut(svg);
 }
 document.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('.cutbtn')) return;
   const g = e.target.closest('svg.trail .card[data-id]'); if (!g || e.button !== 0 || e.pointerType === 'touch') return;
   const svg = g.ownerSVGElement, id = g.dataset.id, q = LAST.pos[id]; if (!q) return;
-  WALK++; svg.querySelector('.walker')?.setAttribute('opacity', '0');
+  WALK++; svg.querySelector('.walker')?.setAttribute('opacity', '0'); svg.querySelector('.hops')?.replaceChildren();
   svg.querySelectorAll('.edge.draw').forEach((x) => x.classList.remove('draw'));
   const p = svgPoint(svg, e);
   q.ox ??= q.x; q.oy ??= q.y;
@@ -487,7 +566,10 @@ function renderStage(animate = true) {
         <button class="btn" data-link="${f.suggestion.grn}|${f.suggestion.po}">Link ${f.suggestion.grn}</button></div>` : ''}
     </article>`;
   }
-  $('#stage').innerHTML = `
+  const offer = cutFor(inv.id);
+  if (!ex.findings.length && offer) findingsHtml += `<div class="try-cut"><p><b>Test the checks yourself.</b> Cut the link <code>${offer.grn} -RECEIVED_AGAINST→ ${offer.po}</code>: it is deleted from the graph in this tab and all six checks run again. If they are real, this invoice becomes an exception and the receipt comes back as the suggested fix.</p>
+      <button class="btn cutgo" data-cut="${offer.grn}|${offer.po}"><svg viewBox="-9 -9 18 18" aria-hidden="true">${SCISSORS}</svg>Cut this link</button></div>`;
+  $('#stage').innerHTML = cutNote() + `
     <div class="inv-head">
       <div>
         <div class="inv-kicker"><span class="status ${ex.status}" id="status">${statusText}</span><span>Invoice · ${esc(inv.vendor_no)}</span></div>
@@ -507,6 +589,7 @@ function renderStage(animate = true) {
     </div>`;
   renderSide(ex);
   S.ex = ex;
+  placeCut($('svg.trail'));
   walk(ex);
 }
 
@@ -516,7 +599,7 @@ function fixedNote(grn, v) {
     <div style="margin-top:8px"><button class="btn ghostbtn" data-reset="1">Reset sample books</button></div></div>`;
 }
 
-const fmtMs = (ms) => (ms == null ? 'n/a' : ms < 1 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(1)} ms`);
+const fmtMs = (ms) => (ms == null ? 'n/a' : ms < 0.1 ? 'under 0.1 ms' : ms < 1 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(1)} ms`);
 
 const PRESETS = [
   ['Who is linked to PAY-3410?', `MATCH path = (p:Payment {id: 'PAY-3410'})
@@ -598,8 +681,11 @@ function linkReceipt(grn, po) {
 }
 
 function reset() {
-  S.linked.clear();
-  loadGraph(); scan(); select(S.sel);
+  S.linked.clear(); S.cuts = [];
+  loadGraph(); scan(); findCuttable(); select(S.sel);
+}
+function findCuttable() {
+  S.cuttable = new Map(rows(S.Q.cuttable.text).filter((r) => S.states[r.inv] !== 'exception').map((r) => [r.inv, r]));
 }
 
 document.addEventListener('click', (e) => {
@@ -610,6 +696,8 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#runq')) return runConsole();
   if (e.target.closest('[data-reset]')) return reset();
   if (e.target.closest('[data-rewalk]')) return walk(S.ex);
+  const cut = e.target.closest('[data-cut]'); if (cut) { const [g, p] = cut.dataset.cut.split('|'); return cutLink(g, p); }
+  if (e.target.closest('[data-break]')) return breakTheBooks();
 });
 document.getElementById('how-open').addEventListener('click', () => document.getElementById('how').showModal());
 document.getElementById('how').addEventListener('click', (e) => {
@@ -651,6 +739,7 @@ async function boot() {
     const t1 = performance.now();
     loadGraph();
     scan();
+    findCuttable();
     const n = graph.nodes.reduce((a, g) => a + g.rows.length, 0), r = graph.rels.reduce((a, g) => a + g.rows.length, 0);
     eng.classList.add('ready');
     eng.innerHTML = `<span class="pulse"></span>Relate 1.0.1 · WebAssembly · <b>${n}</b> nodes · <b>${r}</b> rels · built in ${Math.round(performance.now() - t1)} ms`;

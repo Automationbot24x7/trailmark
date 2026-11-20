@@ -61,6 +61,7 @@
       <div class="books-asof">Accounts payable · books as of <span id="asof">31 Oct 2026</span></div>
       <div class="risk"><span class="risk-n" id="risk">&nbsp;</span><span class="risk-l">at risk across <b id="exc-n">&nbsp;</b> exceptions</span></div>
       <div class="tally" id="tally"></div>
+      <button class="breakbtn" type="button" data-break="1"><svg viewBox="-9 -9 18 18" aria-hidden="true"><path d="M-3.2 3.6 L4.6 -6.4 M3.2 3.6 L-4.6 -6.4"/><circle cx="-4.2" cy="5.2" r="2.4"/><circle cx="4.2" cy="5.2" r="2.4"/></svg>Break the books<small>Cut a receipt link and watch the checks catch it</small></button>
     </section>
     <nav id="list" class="list"></nav>
   </aside>
@@ -84,11 +85,11 @@
   <img class="how-art" src="trail-art.jpg" alt="" width="960" height="640">
   <h2 id="how-h">How Trailmark works</h2>
   <ol>
-    <li><b>The books become a graph.</b> Thirteen sample ledgers (purchase orders, goods receipts, invoices, payments, bank statement lines, our GSTR-2B) are linked by the keys an accountant uses: PO number, bank reference (UTR), GSTIN and invoice number. 184 nodes, 265 relationships.</li>
+    <li><b>The books become a graph.</b> Thirteen sample ledgers (purchase orders, goods receipts, invoices, payments, bank statement lines, our GSTR-2B) are linked by the keys an accountant uses: PO number, the bank's unique transaction reference (UTR) on every transfer, GSTIN (the supplier's tax number) and invoice number. GSTR-2B is the government's monthly statement of the purchases our suppliers reported; tax credit can be claimed only on invoices that appear in it. 184 nodes, 265 relationships.</li>
     <li><b>Six checks walk each trail.</b> Every check is a plain Cypher file. A <span class="k-brk">dashed red</span> link is one the trail expects but cannot find; an <span class="k-sug">amber</span> one is a fix the graph can see; a <span class="k-ok">green</span> one is a fix you made.</li>
     <li><b>It runs in this tab.</b> Relate, compiled to WebAssembly, rebuilds the graph from <code>store/trailmark.rl</code> and runs the same Cypher the command line and the AI-agent server run. There is no server: what you do here stays in your browser.</li>
   </ol>
-  <p class="how-try"><b>Try:</b> <a href="#INV-1042" data-close>INV-1042</a>, then press <i>Link GRN-5520</i> · <a href="#INV-1037" data-close>INV-1037</a> to see who is connected to an ₹8,90,000 payment · the <i>Query the graph</i> tab for your own Cypher.</p>
+  <p class="how-try"><b>Try:</b> <a href="#INV-1042" data-close>INV-1042</a>, then press <i>Link GRN-5520</i> · <a href="#INV-1037" data-close>INV-1037</a> to see who is connected to an ₹8,90,000 payment · <button type="button" class="linkish" data-break="1" data-close>Break the books</button>: cut a receipt link and watch the checks catch it · the <i>Query the graph</i> tab for your own Cypher.</p>
   <p class="how-foot">All data is invented. <a href="https://github.com/Automationbot24x7/trailmark" target="_blank" rel="noopener">Source, README and setup on GitHub</a></p>
 </dialog>
 <script type="module" src="app.js"></script>

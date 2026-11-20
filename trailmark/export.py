@@ -59,5 +59,6 @@ def export_queries(out):
         "checks": [entry(p) for p in check_files()],
         "trail": entry(CYPHER / "trail.cypher"),
         "link_receipt": entry(CYPHER / "link_receipt.cypher"),
+        "cuttable": entry(CYPHER / "cuttable.cypher"),
     }
     out.write_text(json.dumps(data, indent=1), encoding="utf-8")

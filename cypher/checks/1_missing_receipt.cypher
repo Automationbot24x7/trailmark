@@ -21,7 +21,9 @@ RETURN 'missing-receipt' AS check,
        i.id + ' bills ' + toString(po.qty) + ' x ' + po.item + ' on ' + po.id + ', but nothing has been received against that PO. ' +
        CASE WHEN candidate IS NULL THEN 'No unlinked receipt from this vendor looks like it.'
          ELSE candidate.id + ' ("' + candidate.item + '", ' + toString(candidate.qty) + ' received on ' + candidate.date +
-              ') is from the same vendor, linked to no PO, and was keyed against ' + candidate.ref + ', a PO number that does not exist.' +
+              ') is from the same vendor and linked to no PO. ' +
+              CASE WHEN candidate.ref = po.id THEN 'It was keyed against ' + po.id + ' itself, so the link to the PO is what went missing.'
+                   ELSE 'It was keyed against ' + candidate.ref + ', a PO number that does not exist.' END +
               reduce(s = '', r IN rejected | s + ' ' + r.id + ' scores higher (' + toString(toInteger(r.sim)) + '.' + right('0' + toString(toInteger(round(r.sim * 100)) % 100), 2) + ') but ' +
                      CASE WHEN r.linked_to IS NOT NULL THEN 'is already received against ' + r.linked_to + '.'
                           ELSE 'has a different quantity (' + toString(r.qty) + ').' END)
