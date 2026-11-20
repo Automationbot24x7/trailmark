@@ -194,6 +194,34 @@ svg.trail { display: block; width: 100%; min-width: 900px; height: auto; font-fa
 .ok-note { padding: 16px 18px; background: var(--green-bg); border-left: 3px solid var(--green); }
 .ok-note b { display: block; font-size: 18px; margin-bottom: 4px; }
 
+/* ---------- live trail: paper cards, the walk, hover and drag ---------- */
+.card:not(.dim):not(.ghost) rect.box { filter: url(#lift); }
+.card.ghost rect.box { fill: #ead8cc; filter: url(#hole); }
+@media (pointer: fine) { .card[data-id] { cursor: grab; } }
+.card.dragging { cursor: grabbing; }
+.card.dragging rect.box { filter: url(#lift-hi); }
+.card.hit rect.box { animation: hit .7s ease-out; }
+.card.miss-hit rect.box { animation: missHit 1.1s ease-out 2; }
+@keyframes hit { 0% { stroke: var(--ink); stroke-width: 3.2; } 100% { } }
+@keyframes missHit { 0% { stroke-width: 4.5; } 50% { stroke-width: 2.2; } 100% { } }
+.walker .w-dot { fill: var(--ink); }
+.walker .w-halo { fill: var(--ink); opacity: .14; animation: halo 1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.walker.miss .w-dot, .walker.miss .w-halo { fill: var(--red); }
+@keyframes halo { 50% { transform: scale(1.45); opacity: .05; } }
+svg.trail.hov .card:not(.lit) { opacity: .38; transition: opacity .15s; }
+svg.trail.hov .edge:not(.lit), svg.trail.hov .elab:not(.lit) { opacity: .18; transition: opacity .15s; }
+svg.trail.hov .edge.lit { stroke-width: 2.4; }
+.walk-row { display: flex; align-items: center; gap: 16px; min-height: 42px; padding: 9px 16px; border-top: 1px solid var(--rule); }
+.walk-log { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; min-width: 0; }
+.walk-log .wl-h { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-right: 4px; }
+.walk-log .hop { display: inline-flex; align-items: center; gap: 8px; animation: hopIn .25s ease-out; }
+.walk-log .r { font-family: var(--mono); font-style: normal; font-size: 11px; color: var(--ink-3); }
+.walk-log b.miss { font-family: var(--mono); font-size: 12px; color: var(--red); }
+@keyframes hopIn { from { opacity: 0; transform: translateX(-4px); } }
+.trail-hint { margin-left: auto; font-size: 11.5px; color: var(--ink-4); white-space: nowrap; }
+.rewalk { border: none; background: none; padding: 0; font-size: 12px; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+@media (max-width: 1100px) { .trail-hint { display: none; } }
+
 /* ---------- cypher side ---------- */
 .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ink); margin-bottom: 14px; }
 .tab { border: none; background: none; padding: 0 0 6px; margin-right: 22px; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
@@ -238,6 +266,7 @@ table.res td { border-bottom: 1px solid var(--rule); padding: 5px 8px 5px 0; fon
   .edge.brk { animation: none !important; }
   .card.appear, .edge.draw { animation: none !important; stroke-dashoffset: 0; }
   .edge.draw:not(.brk):not(.sug) { stroke-dasharray: none; }
+  .walker .w-halo, .card.hit rect.box, .card.miss-hit rect.box, .walk-log .hop { animation: none !important; }
 }
 
 @media (max-width: 1180px) { .engine { display: none; } }

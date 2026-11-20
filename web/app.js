@@ -209,6 +209,14 @@ function edgePath(a, b) {
   return { d: `M${x1} ${y1} C${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`, mx: (x1 + x2) / 2, my: above ? y1 - 16 : (y1 + y2) / 2 - 4, anchor: 'middle', rev: ax > bx };
 }
 
+function labelSvg(p, label, cls) {
+  const parts = !p.arc && label.length > 8 && label.includes('_') ? [label.slice(0, label.indexOf('_') + 1), label.slice(label.indexOf('_') + 1)] : [label];
+  const cw = 6.1, lw = Math.max(...parts.map((t) => t.length)) * cw + 8, lh = parts.length * 10 + 4;
+  const lx = p.anchor === 'middle' ? p.mx - lw / 2 : p.anchor === 'end' ? p.mx - lw + 4 : p.mx - 4;
+  const top = p.my - (parts.length - 1) * 5 - 9;
+  return `<rect x="${lx}" y="${top}" width="${lw}" height="${lh}"/><text class="elabel ${cls}" x="${p.mx}" y="${top + 9}" text-anchor="${p.anchor}">${parts.map((t, i) => `<tspan x="${p.mx}" dy="${i ? 10 : 0}">${esc(t)}</tspan>`).join('')}</text>`;
+}
+
 let LAST = { pos: {} };
 // fit a line in a card: as is, gently condensed (up to 25%), or cut
 function fit(cls, x, y, s, n) {
@@ -239,15 +247,11 @@ function renderTrail(ex, animate) {
   let k = 0;
   const edge = (a, b, cls, label, delay) => {
     const p = edgePath(a, b); if (!p) return;
-    const len = 400;
+    const len = 400, n = k++;
     const mk = `url(#arr-${cls.includes('brk') ? 'r' : cls.includes('sug') ? 'a' : cls.includes('fixed') ? 'g' : cls.includes('high') ? 'r' : 'k'})`;
-    edges += `<path class="edge ${cls}${animate ? ' draw' : ''}" d="${p.d}" style="--len:${len};animation-delay:${delay}ms" ${p.rev ? 'marker-start' : 'marker-end'}="${mk}"><title>${esc(label || '')}</title></path>`;
+    edges += `<path class="edge ${cls}${animate ? ' draw' : ''}" d="${p.d}" data-a="${a.it.id}" data-b="${b.it.id}" data-t="${esc(label || '')}" data-k="${n}" style="--len:${len};animation-delay:${delay}ms" ${p.rev ? 'marker-start' : 'marker-end'}="${mk}"><title>${esc(label || '')}</title></path>`;
     if (!label) return;
-    const parts = !p.arc && label.length > 8 && label.includes('_') ? [label.slice(0, label.indexOf('_') + 1), label.slice(label.indexOf('_') + 1)] : [label];
-    const cw = 6.1, lw = Math.max(...parts.map((t) => t.length)) * cw + 8, lh = parts.length * 10 + 4;
-    const lx = p.anchor === 'middle' ? p.mx - lw / 2 : p.anchor === 'end' ? p.mx - lw + 4 : p.mx - 4;
-    const top = p.my - (parts.length - 1) * 5 - 9;
-    labels += `<g class="elab ${cls}"><rect x="${lx}" y="${top}" width="${lw}" height="${lh}"/><text class="elabel ${cls}" x="${p.mx}" y="${top + 9}" text-anchor="${p.anchor}">${parts.map((t, i) => `<tspan x="${p.mx}" dy="${i ? 10 : 0}">${esc(t)}</tspan>`).join('')}</text></g>`;
+    labels += `<g class="elab ${cls}" data-k="${n}">${labelSvg(p, label, cls)}</g>`;
   };
   // relationships (drawn from source to target; arrows show the stored direction)
   const colOf = (id) => (L.pos[id] ? L.pos[id].x : 0);
@@ -296,9 +300,149 @@ function renderTrail(ex, animate) {
   }
   const marker = (id, color) => `<marker id="arr-${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="${color}"/></marker>`;
   return `<svg class="trail" viewBox="0 0 ${L.width} ${L.height}" role="img" aria-label="Trail of ${ex.inv.id}">
-    <defs>${marker('k', '#a6a198')}${marker('r', '#c7341f')}${marker('a', '#a8650b')}${marker('g', '#2c7a4b')}</defs>
-    ${heads}${edges}${cards}${labels}</svg>`;
+    <defs>${marker('k', '#a6a198')}${marker('r', '#c7341f')}${marker('a', '#a8650b')}${marker('g', '#2c7a4b')}
+      <filter id="lift" x="-12%" y="-15%" width="124%" height="150%"><feDropShadow dx="0" dy="1" stdDeviation=".8" flood-color="#3b2a1a" flood-opacity=".22"/><feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#3b2a1a" flood-opacity=".11"/></filter>
+      <filter id="lift-hi" x="-20%" y="-25%" width="140%" height="180%"><feDropShadow dx="0" dy="2" stdDeviation="1.4" flood-color="#3b2a1a" flood-opacity=".22"/><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#3b2a1a" flood-opacity=".2"/></filter>
+      <filter id="hole" x="0" y="0" width="100%" height="100%"><feFlood flood-color="#5a1a10" flood-opacity=".42"/><feComposite in2="SourceAlpha" operator="out"/><feGaussianBlur stdDeviation="3.2"/><feOffset dx="0" dy="2.5" result="s"/><feComposite in="s" in2="SourceAlpha" operator="in" result="in"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="in"/></feMerge></filter></defs>
+    ${heads}<g class="edges">${edges}</g><g class="cards">${cards}</g><g class="labels">${labels}</g>
+    <g class="walker" opacity="0"><circle class="w-halo" r="11"/><circle class="w-dot" r="4.5"/></g></svg>`;
 }
+
+// ---------------------------------------------------------------- live trail: walk, hover, drag
+// The walk replays the evidence path the check returned, hop by hop, and stops where the link is missing.
+let WALK = 0;
+const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function walkSteps(ex) {
+  const steps = [];
+  const vendor = (id) => LAST.pos[id]?.it.label === 'Vendor';
+  for (const f of ex.findings) {
+    // start from the invoice when the check returned the path the other way round; the vendor is context, not a hop
+    let p = (f.path || []).filter((id) => !vendor(id));
+    if (p.length && p[p.length - 1] === ex.inv.id && p[0] !== ex.inv.id) p = p.reverse();
+    // the evidence can branch (one account, two people): each hop starts from the latest visited card it is joined to
+    const joined = (x, y) => ex.rels.some((r) => (r.from === x && r.to === y) || (r.from === y && r.to === x));
+    for (let i = 1; i < p.length; i++) {
+      const from = p.slice(0, i).reverse().find((x) => joined(x, p[i])) || p[i - 1];
+      steps.push([from, p[i]]);
+    }
+    if (f.missing) steps.push([f.missing.after, '__ghost_' + f.missing.label, KIND[f.missing.label] || 'link']);
+  }
+  if (!steps.length) { // clean trail: from the invoice, visit every document on the main row it is joined to
+    const main = new Set(Object.values(LAST.pos).filter((q) => q.y === LAST.rowY[0] && !q.it.ghost && q.it.label !== 'Vendor').map((q) => q.it.id));
+    const nb = (x) => ex.rels.filter((r) => r.from === x || r.to === x).map((r) => (r.from === x ? r.to : r.from)).filter((y) => main.has(y));
+    const seen = [ex.inv.id];
+    for (;;) {
+      const from = [...seen].reverse().find((x) => nb(x).some((y) => !seen.includes(y)));
+      if (!from) break;
+      const to = nb(from).filter((y) => !seen.includes(y)).sort((u, v) => LAST.pos[u].x - LAST.pos[v].x)[0];
+      steps.push([from, to]); seen.push(to);
+    }
+  }
+  return steps;
+}
+function walk(ex) {
+  const svg = $('svg.trail'), log = $('#walk-log'); if (!svg || !log) return;
+  const my = ++WALK, steps = walkSteps(ex);
+  const w = svg.querySelector('.walker');
+  const centre = (id) => { const q = LAST.pos[id]; return q && { x: q.x + W / 2, y: q.y + H / 2 }; };
+  const card = (id) => svg.querySelector(`.card[data-id="${id}"]`);
+  const hit = (id, cls = 'hit') => { const c = card(id); if (!c) return; c.classList.remove(cls); void c.getBBox(); c.classList.add(cls); };
+  const pathFor = (a, b) => [...svg.querySelectorAll('.edge')].find((e) => (e.dataset.a === a && e.dataset.b === b) || (e.dataset.a === b && e.dataset.b === a));
+  log.innerHTML = `<span class="wl-h">Walk</span><span class="hop"><b class="chip" data-id="${steps[0]?.[0] || ex.inv.id}">${steps[0]?.[0] || ex.inv.id}</b></span>`;
+  if (!steps.length) return;
+  if (reduced()) { // no motion: write the whole walk at once
+    for (const [a, b, miss] of steps) addHop(log, a, b, miss, pathFor(a, b));
+    return;
+  }
+  let i = 0;
+  const next = () => {
+    if (my !== WALK) return;
+    if (i >= steps.length) { w.setAttribute('opacity', '0'); return; }
+    const [a, b, miss] = steps[i++];
+    const el = pathFor(a, b), A = centre(a), B = centre(b);
+    if (!A || !B) return next();
+    const len = el ? el.getTotalLength() : 0;
+    const fwd = el ? el.dataset.a === a : true;
+    const at = (t) => {
+      if (!el) return { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t };
+      return el.getPointAtLength(len * (fwd ? t : 1 - t));
+    };
+    const dur = Math.max(420, Math.min(900, len * 2.2)), t0 = performance.now();
+    w.classList.toggle('miss', !!miss);
+    hit(a);
+    const tick = (now) => {
+      if (my !== WALK) return;
+      const t = Math.min(1, (now - t0) / dur), e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const pt = at(e); w.setAttribute('transform', `translate(${pt.x} ${pt.y})`); w.setAttribute('opacity', '1');
+      if (t < 1) return requestAnimationFrame(tick);
+      addHop(log, a, b, miss, el);
+      if (miss) { hit(b, 'miss-hit'); w.setAttribute('opacity', '0'); return; }
+      hit(b); setTimeout(next, 160);
+    };
+    requestAnimationFrame(tick);
+  };
+  setTimeout(next, 700);
+}
+function addHop(log, a, b, miss, el) {
+  const last = log.querySelector('.hop:last-child .chip')?.dataset.id;
+  if (last && last !== a) log.insertAdjacentHTML('beforeend', `<span class="hop"><i class="r">·</i><b class="chip" data-id="${a}">${a}</b></span>`);
+  const t = el?.dataset.t || '';
+  const fwd = !el || el.dataset.a === a;
+  const rel = t ? (fwd ? `-${t}→` : `←${t}-`) : '→';
+  log.insertAdjacentHTML('beforeend', miss
+    ? `<span class="hop"><i class="r miss">→</i><b class="miss">no ${esc(String(miss).toLowerCase())} found</b></span>`
+    : `<span class="hop"><i class="r">${esc(rel)}</i><b class="chip" data-id="${b}">${b}</b></span>`);
+}
+
+function lightUp(id) {
+  const svg = $('svg.trail'); if (!svg) return;
+  svg.classList.toggle('hov', !!id);
+  svg.querySelectorAll('.lit').forEach((x) => x.classList.remove('lit'));
+  if (!id) return;
+  const near = new Set([id]);
+  svg.querySelectorAll('.edge').forEach((e) => {
+    if (e.dataset.a !== id && e.dataset.b !== id) return;
+    e.classList.add('lit'); near.add(e.dataset.a); near.add(e.dataset.b);
+    svg.querySelector(`.elab[data-k="${e.dataset.k}"]`)?.classList.add('lit');
+  });
+  near.forEach((n) => svg.querySelector(`.card[data-id="${n}"]`)?.classList.add('lit'));
+}
+
+let DRAG = null;
+function svgPoint(svg, e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+function reroute(svg, id) {
+  svg.querySelectorAll('.edge').forEach((e) => {
+    if (e.dataset.a !== id && e.dataset.b !== id) return;
+    const p = edgePath(LAST.pos[e.dataset.a], LAST.pos[e.dataset.b]); if (!p) return;
+    e.setAttribute('d', p.d);
+    e.removeAttribute('marker-start'); e.removeAttribute('marker-end');
+    e.setAttribute(p.rev ? 'marker-start' : 'marker-end', `url(#arr-${e.classList.contains('brk') || e.classList.contains('high') ? 'r' : e.classList.contains('sug') ? 'a' : e.classList.contains('fixed') ? 'g' : 'k'})`);
+    const lab = svg.querySelector(`.elab[data-k="${e.dataset.k}"]`);
+    if (lab) lab.innerHTML = labelSvg(p, e.dataset.t, [...e.classList].filter((c) => ['ev', 'high', 'brk', 'sug', 'fixed'].includes(c)).join(' '));
+  });
+}
+document.addEventListener('pointerdown', (e) => {
+  const g = e.target.closest('svg.trail .card[data-id]'); if (!g || e.button !== 0 || e.pointerType === 'touch') return;
+  const svg = g.ownerSVGElement, id = g.dataset.id, q = LAST.pos[id]; if (!q) return;
+  WALK++; svg.querySelector('.walker')?.setAttribute('opacity', '0');
+  svg.querySelectorAll('.edge.draw').forEach((x) => x.classList.remove('draw'));
+  const p = svgPoint(svg, e);
+  q.ox ??= q.x; q.oy ??= q.y;
+  DRAG = { svg, g, id, dx: p.x - q.x, dy: p.y - q.y };
+  g.classList.add('dragging'); svg.querySelector('.cards').appendChild(g);
+  g.setPointerCapture?.(e.pointerId);
+  e.preventDefault();
+});
+document.addEventListener('pointermove', (e) => {
+  if (!DRAG) return;
+  const { svg, g, id } = DRAG, p = svgPoint(svg, e), q = LAST.pos[id];
+  const vb = svg.viewBox.baseVal;
+  q.x = Math.max(4, Math.min(vb.width - W - 4, p.x - DRAG.dx));
+  q.y = Math.max(34, Math.min(vb.height - H - 4, p.y - DRAG.dy));
+  g.setAttribute('transform', `translate(${q.x - q.ox} ${q.y - q.oy})`);
+  reroute(svg, id);
+});
+document.addEventListener('pointerup', () => { if (!DRAG) return; DRAG.g.classList.remove('dragging'); DRAG = null; });
 
 // ---------------------------------------------------------------- cypher highlighting
 function highlight(src) {
@@ -347,15 +491,18 @@ function renderStage(animate = true) {
       </div>
     </div>
     <div class="trail-wrap">
-      <div class="trail-cap"><span><b>The trail</b> · ${ex.nodes.length} nodes, ${ex.rels.length} relationships, walked in ${fmtMs(S.timings.trail)}</span>
+      <div class="trail-cap"><span><b>The trail</b> · ${ex.nodes.length} nodes, ${ex.rels.length} relationships, walked in ${fmtMs(S.timings.trail)} · <button class="rewalk" data-rewalk="1" type="button">Walk it again</button></span>
         <span class="legend"><span><i></i>link holds</span><span><i class="brk"></i>expected, not found</span><span><i class="sug"></i>suggested</span><span><i class="ok"></i>fixed</span></span></div>
       <div class="trail-scroll">${renderTrail(ex, animate)}</div>
+      <div class="walk-row"><div class="walk-log" id="walk-log" aria-live="polite"></div><span class="trail-hint">Drag a card to move it · hover one to light up its links</span></div>
     </div>
     <div class="cols">
       <section><h2 class="sec-h"><span>${ex.findings.length ? 'Where it breaks' : 'Result'}</span><span>${ex.findings.length ? ex.findings.length + ' finding' + (ex.findings.length > 1 ? 's' : '') : ''}</span></h2>${findingsHtml}</section>
       <section id="side"></section>
     </div>`;
   renderSide(ex);
+  S.ex = ex;
+  walk(ex);
 }
 
 function fixedNote(grn, v) {
@@ -457,6 +604,7 @@ document.addEventListener('click', (e) => {
   const p = e.target.closest('[data-preset]'); if (p) { $('#cq').value = PRESETS[+p.dataset.preset][1]; return runConsole(); }
   if (e.target.closest('#runq')) return runConsole();
   if (e.target.closest('[data-reset]')) return reset();
+  if (e.target.closest('[data-rewalk]')) return walk(S.ex);
 });
 document.getElementById('how-open').addEventListener('click', () => document.getElementById('how').showModal());
 document.getElementById('how').addEventListener('click', (e) => {
@@ -464,11 +612,18 @@ document.getElementById('how').addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.target.id === 'cq' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runConsole(); });
 document.addEventListener('mouseover', (e) => {
+  if (DRAG) return;
+  const k = e.target.closest('svg.trail .card[data-id]');
+  if (k) return lightUp(k.dataset.id);
+  if (e.target.closest('svg.trail')) return lightUp(null);
   const c = e.target.closest('.chip'); if (!c) return;
+  lightUp(c.dataset.id);
   document.querySelectorAll(`svg .card[data-id="${c.dataset.id}"]`).forEach((g) => g.classList.add('focus'));
 });
 document.addEventListener('mouseout', (e) => {
+  if (e.target.closest('svg.trail') && !e.relatedTarget?.closest?.('svg.trail')) lightUp(null);
   const c = e.target.closest('.chip'); if (!c) return;
+  lightUp(null);
   document.querySelectorAll(`svg .card[data-id="${c.dataset.id}"]`).forEach((g) => { if (g.dataset.id !== S.sel) g.classList.remove('focus'); });
 });
 window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== S.sel) select(id); });
