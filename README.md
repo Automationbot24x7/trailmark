@@ -1,6 +1,6 @@
 # Trailmark
 
-![Trailmark: why doesn't this invoice reconcile? A row of paper documents, purchase order, goods receipt, invoice, cheque and bank statement, joined by a red thread that is cut between the receipt and the invoice](docs/hero.jpg)
+![Trailmark: why doesn't this invoice reconcile? A paper-cut landscape where a path of invoices, receipts and purchase orders runs toward the bank on the far hill, with one stretch broken away and a figure holding a lantern at the gap](docs/hero.jpg)
 
 **Why doesn't this invoice reconcile?** Trailmark follows an invoice through the accounts-payable trail (purchase order, goods receipt, invoice, payment, bank line, our GSTR-2B) as a [Relate](https://github.com/relatedb/relate) graph. It points at the exact link that is broken and shows the path that proves it.
 
@@ -244,7 +244,7 @@ tests/            end-to-end tests (standard library only)
 
 - [Relate](https://github.com/relatedb/relate) by Neo4j (Apache-2.0): `relate-db` from PyPI, and the unmodified `@relate/relate-wasm` 1.0.1 package vendored in [`web/vendor/relate-wasm/`](web/vendor/relate-wasm/NOTICE.md).
 - Fonts: Inter Tight and JetBrains Mono from Google Fonts.
-- The paper-trail illustration (README hero, link preview, loading screen) was made with an AI image model; prompt in [`docs/brand/art-prompts.md`](docs/brand/art-prompts.md). Screenshots and diagrams are rendered from the app and from code.
+- The paper-cut illustration (README hero, link preview, loading screen) was made with an AI image model; prompt in [`docs/brand/art-prompts.md`](docs/brand/art-prompts.md). Screenshots and diagrams are rendered from the app and from code.
 - Everything else was written for this hackathon, with help from an AI coding assistant (described in the Devpost submission).
 
 ## License
