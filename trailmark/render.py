@@ -129,7 +129,7 @@ def trail(ex: dict) -> str:
 def finding(f: dict, n: int | None = None) -> str:
     sev = red("HIGH  ") if f["severity"] == "high" else amber("MEDIUM")
     lines = [
-        f"  {sev} {bold(f['title'])} — {rupees_in_text(f['headline'])}",
+        f"  {sev} {bold(f['title'])}: {rupees_in_text(f['headline'])}",
         *[f"         {x}" for x in wrap(rupees_in_text(f["detail"]), 74)],
     ]
     if f.get("suggestion"):

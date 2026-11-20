@@ -46,7 +46,7 @@
     <section class="books">
       <div class="books-co">Sample Traders Pvt Ltd <em>(fictional)</em></div>
       <div class="books-asof">Accounts payable · books as of <span id="asof">31 Oct 2026</span></div>
-      <div class="risk"><span class="risk-n" id="risk">—</span><span class="risk-l">at risk across <b id="exc-n">—</b> exceptions</span></div>
+      <div class="risk"><span class="risk-n" id="risk">&nbsp;</span><span class="risk-l">at risk across <b id="exc-n">&nbsp;</b> exceptions</span></div>
       <div class="tally" id="tally"></div>
     </section>
     <nav id="list" class="list"></nav>
@@ -54,6 +54,7 @@
 
   <section class="stage" id="stage">
     <div class="loading" id="loading">
+      <img class="ld-art" src="trail-art.jpg" alt="Paper documents joined by a red thread that is cut between two of them" width="960" height="640">
       <div class="ld-line"></div>
       <p>Loading the Relate engine and rebuilding the graph from <code>store/trailmark.rl</code>…</p>
     </div>
@@ -67,6 +68,7 @@
 
 <dialog class="how" id="how" aria-labelledby="how-h">
   <form method="dialog" class="how-x"><button aria-label="Close">Close</button></form>
+  <img class="how-art" src="trail-art.jpg" alt="" width="960" height="640">
   <h2 id="how-h">How Trailmark works</h2>
   <ol>
     <li><b>The books become a graph.</b> Thirteen sample ledgers (purchase orders, goods receipts, invoices, payments, bank statement lines, our GSTR-2B) are linked by the keys an accountant uses: PO number, bank reference (UTR), GSTIN and invoice number. 184 nodes, 265 relationships.</li>

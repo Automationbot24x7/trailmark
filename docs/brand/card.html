@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- Title cards over the trail illustration. Usage: card.html?img=<file>&w=1200&h=800&mode=thumb|banner|og -->
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; overflow: hidden; background: #f6f4ef; }
+  #c { position: relative; overflow: hidden; }
+  #c img { position: absolute; left: 0; width: 100%; height: auto; }
+  .brand { position: absolute; display: flex; align-items: center; gap: 14px; font: 800 30px 'Inter Tight', sans-serif; color: #141414; letter-spacing: -.02em; }
+  .brand svg { width: 52px; height: 34px; }
+  h1 { position: absolute; margin: 0; font: 800 76px/1.02 'Inter Tight', sans-serif; letter-spacing: -.035em; color: #141414; }
+  p { position: absolute; margin: 0; font: 600 25px/1.35 'Inter Tight', sans-serif; color: #3b3a37; }
+  .tag { position: absolute; font: 600 15px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #75716a; }
+</style></head>
+<body>
+<div id="c">
+  <img id="art" alt="">
+  <div class="brand" id="brand"><svg viewBox="0 0 40 24"><path d="M3 19 L13 7 L23 13" stroke="#141414" stroke-width="2.4" fill="none"/><path d="M23 13 L35 4" stroke="#c7341f" stroke-width="2.4" stroke-dasharray="3.2 2.6" fill="none"/><circle cx="3" cy="19" r="2.9" fill="#141414"/><circle cx="13" cy="7" r="2.9" fill="#141414"/><circle cx="23" cy="13" r="2.9" fill="#141414"/><circle cx="35" cy="4" r="2.9" fill="#f6f4ef" stroke="#c7341f" stroke-width="1.6"/></svg>Trailmark</div>
+  <h1 id="h">Why doesn’t this invoice reconcile?</h1>
+  <p id="p"></p>
+  <div class="tag" id="t"></div>
+</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const W = +q.get('w') || 1200, H = +q.get('h') || 800, mode = q.get('mode') || 'thumb';
+  const c = document.getElementById('c'); c.style.width = W + 'px'; c.style.height = H + 'px';
+  const art = document.getElementById('art'); art.src = q.get('img');
+  const set = (id, css) => Object.assign(document.getElementById(id).style, css);
+  if (mode === 'thumb') {          // 3:2 Devpost card: art fills, title on the empty top
+    art.style.top = (H - W * 2 / 3) + 'px';
+    set('brand', { left: '64px', top: '52px' });
+    set('h', { left: '64px', top: '118px', fontSize: '82px', maxWidth: '1000px' });
+  } else if (mode === 'banner') {  // README hero 1600x900: art bottom-aligned, title and one line on the empty top
+    art.style.top = '-60px';
+    set('brand', { left: '80px', top: '56px', fontSize: '34px' });
+    set('h', { left: '80px', top: '118px', fontSize: '88px', maxWidth: '1200px' });
+    document.getElementById('p').textContent = 'Accounts payable as a Relate graph. Six checks walk every invoice from purchase order to bank line and our GSTR-2B, and land on the link that broke.';
+    set('p', { left: '80px', top: '318px', maxWidth: '1150px', fontSize: '27px' });
+  } else {                         // og 1200x630
+    art.style.top = '-92px';
+    set('brand', { left: '60px', top: '40px' });
+    set('h', { left: '60px', top: '96px', fontSize: '60px', maxWidth: '1120px', whiteSpace: 'nowrap' });
+    document.getElementById('t').textContent = 'Relate graph · runs in your browser · sample data';
+    set('t', { left: '62px', top: '182px' });
+  }
+</script>
+</body></html>

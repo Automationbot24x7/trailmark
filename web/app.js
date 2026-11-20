@@ -364,7 +364,7 @@ function fixedNote(grn, v) {
     <div style="margin-top:8px"><button class="btn ghostbtn" data-reset="1">Reset sample books</button></div></div>`;
 }
 
-const fmtMs = (ms) => (ms == null ? '—' : ms < 1 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(1)} ms`);
+const fmtMs = (ms) => (ms == null ? 'n/a' : ms < 1 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(1)} ms`);
 
 const PRESETS = [
   ['Who is linked to PAY-3410?', `MATCH path = (p:Payment {id: 'PAY-3410'})

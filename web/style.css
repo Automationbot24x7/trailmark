@@ -44,13 +44,14 @@ button { font: inherit; color: inherit; }
 .engine.fail .pulse { background: var(--red); }
 .howbtn { height: 30px; padding: 0 12px; border: 1px solid var(--ink); background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .howbtn:hover { background: var(--ink); color: var(--paper); }
-dialog.how { max-width: 620px; width: calc(100% - 32px); border: 1px solid var(--ink); background: var(--card); color: var(--ink); padding: 28px 32px 24px; }
+dialog.how { overflow-x: hidden; max-width: 620px; width: calc(100% - 32px); border: 1px solid var(--ink); background: var(--card); color: var(--ink); padding: 28px 32px 24px; }
 dialog.how::backdrop { background: rgba(20, 20, 20, .35); }
 dialog.how h2 { margin: 0 0 14px; font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
 dialog.how ol { margin: 0; padding-left: 20px; display: grid; gap: 12px; font-size: 14.5px; line-height: 1.55; color: var(--ink-2); }
 dialog.how ol b { color: var(--ink); }
 .how-x { position: absolute; top: 18px; right: 20px; }
-.how-x button { border: none; background: none; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); cursor: pointer; }
+.how-x { z-index: 2; }
+.how-x button { border: none; background: var(--card); padding: 4px 9px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); cursor: pointer; }
 .how-try { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 14px; }
 .how-try a { font-family: var(--mono); font-weight: 600; font-size: 13px; }
 .how-foot { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-3); }
@@ -94,7 +95,9 @@ dialog.how ol b { color: var(--ink); }
 .row .amt { font-family: var(--mono); font-size: 12px; padding-top: 1px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
 /* ---------- stage ---------- */
-.loading { padding: 80px 0; color: var(--ink-3); max-width: 520px; }
+.loading { padding: 40px 0; color: var(--ink-3); max-width: 720px; }
+.ld-art { display: block; width: 100%; height: auto; margin-bottom: 18px; }
+.how-art { display: block; width: calc(100% + 64px); height: 190px; object-fit: cover; object-position: 50% 78%; margin: -28px -32px 18px; }
 .ld-line { height: 2px; background: linear-gradient(90deg, var(--ink) 0 30%, transparent 30%); background-size: 200% 100%; animation: ld 1s linear infinite; margin-bottom: 14px; }
 @keyframes ld { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
