@@ -377,7 +377,7 @@ function breakTheBooks() {
   const pick = [...S.cuttable.keys()].find((id) => S.states[id] === 'reconciled' && id !== S.sel) || [...S.cuttable.keys()].find((id) => cutFor(id));
   if (!pick) return;
   select(pick);
-  const b = $('svg.trail .cutbtn'); if (b) { b.classList.add('invite'); b.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); }
+  const b = $('svg.trail .cutbtn'); if (b) { b.classList.add('invite'); const r = b.getBoundingClientRect(); window.scrollBy({ top: r.top - innerHeight / 2, behavior: 'smooth' }); } // scroll this page only, never a page that embeds it
 }
 
 // ---------------------------------------------------------------- live trail: walk, hover, drag

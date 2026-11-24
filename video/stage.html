@@ -38,7 +38,7 @@
 </head>
 <body>
 <div id="cam">
-  <iframe id="app" src="/web/#INV-1042"></iframe>
+  <iframe id="app" src="/web/?nointro#INV-1042"></iframe>
   <div id="ring"></div>
   <svg id="cursor" viewBox="0 0 26 26"><path d="M3 2 L3 21 L8.5 16 L12.5 24.5 L16 23 L12 14.8 L19.5 14.8 Z" fill="#141414" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
 </div>
@@ -47,9 +47,9 @@
 <div id="cap"></div>
 <div id="end">
   <div class="brand"><svg viewBox="0 0 40 24" width="64" height="40"><path d="M3 19 L13 7 L23 13" stroke="#141414" stroke-width="2.4" fill="none"/><path d="M23 13 L35 4" stroke="#c7341f" stroke-width="2.4" stroke-dasharray="3.2 2.6" fill="none"/><circle cx="3" cy="19" r="2.9" fill="#141414"/><circle cx="13" cy="7" r="2.9" fill="#141414"/><circle cx="23" cy="13" r="2.9" fill="#141414"/><circle cx="35" cy="4" r="2.9" fill="#f6f4ef" stroke="#c7341f" stroke-width="1.6"/></svg>Trailmark</div>
-  <h1>Why doesn’t this invoice reconcile?</h1>
+  <h1>Cut any link in the books. Watch the graph catch it.</h1>
   <p>Accounts payable as a Relate graph: one file, the same Cypher in the browser, the command line and an AI agent’s tools. Open source. All data in this video is invented sample data.</p>
-  <div class="links">github.com/Automationbot24x7/trailmark<br><span>live demo:</span> automationbot24x7.github.io/trailmark</div>
+  <div class="links"><span>try it:</span> automationbot24x7.github.io/trailmark/web<br><span>code:</span> github.com/Automationbot24x7/trailmark</div>
 </div>
 <script>
 const $ = (s) => document.querySelector(s);
@@ -141,7 +141,7 @@ window.stageReady = false;
   await document.fonts.ready;
   for (;;) { try { if (D().querySelector('#engine.ready') && D().querySelector('svg.trail')) break; } catch {} await sleep(200); }
   await A().document.fonts.ready;
-  window.CAPTURE = { scan: await (await fetch('capture/scan.ansi')).text(), mcp: await (await fetch('capture/mcp.jsonl')).text(), relate: await (await fetch('capture/relate.txt')).text() };
+  window.CAPTURE = { scan: await (await fetch('capture/scan.ansi')).text(), mcp: await (await fetch('capture/mcp.jsonl')).text(), relate: await (await fetch('capture/relate.txt')).text(), tests: await (await fetch('capture/tests.txt')).text() };
   setCam(); setCur();
   await sleep(2500);
   window.stageReady = true;
@@ -163,7 +163,13 @@ async function press(sel, idx = 0) {
   ring.style.left = P.x + 'px'; ring.style.top = P.y + 'px';
   ring.animate([{ opacity: 1, transform: 'scale(.5)' }, { opacity: 0, transform: 'scale(1.5)' }], { duration: 420, easing: 'ease-out' });
   await sleep(120);
-  r.el.click();
+  r.el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: A() }));
+}
+// reload the app inside the take, so its logo intro plays, and wait for the graph
+async function reloadApp(url) {
+  app.src = url;
+  await sleep(300);
+  for (;;) { try { if (D().querySelector('#engine.ready') && D().querySelector('svg.trail') && !D().querySelector('#intro')) break; } catch {} await sleep(100); }
 }
 async function typeLines(cmdLines, note = '') {
   for (let j = 0; j < cmdLines.length; j++) {
@@ -177,71 +183,77 @@ async function typeLines(cmdLines, note = '') {
 
 window.startTimeline = async () => {
   const full = { x: 0, y: 0, s: 1 };
-  // 1. The question and the graph
-  await beat('Month-end: 26 invoices, and six don’t reconcile. The reason is never on one ledger.', 'Sample books · all data invented');
-  await beat('Trailmark links POs, receipts, invoices, payments, bank lines and our GSTR-2B into one graph.', '', '',
-    () => camTo(target(union(rectOf('.books'), rectOf('.row', 3)), 30, 2.0), 1300));
-  await beat('The graph engine is Relate, running right here in the browser as WebAssembly.', 'Relate · embedded', '',
-    () => camTo(target(union(rectOf('#engine'), rectOf('.sample-tag')), 40, 2.2), 1200));
-  // 2. INV-1042: the missing link, and the fix
-  await beat('INV-1042 bills PO-7713, but nothing was received. The dashed red card is the missing link.', 'Invoice has no goods receipt', '',
-    () => camTo(target(rectOf('.trail-wrap'), 20, 1.6), 1300));
-  await beat('Vector search finds lookalikes; the graph rejects GRN-5404, already received elsewhere.', '', '',
-    () => camTo(target(rectOf('.finding'), 24, 1.7), 1200));
-  await beat('GRN-5520 matches, but stores keyed it to PO-7731, a PO that doesn’t exist.', '', '',
-    () => sleep(2600), () => moveToEl('[data-link]'));
-  await beat('One click links it. The trail holds, and ₹99,120 leaves the at-risk total.', 'Fixed', 'ok',
-    () => press('[data-link]'), () => sleep(500), () => camTo(full, 1200));
-  // 3. INV-1037: the employee's account, and a question of our own
-  await beat('INV-1037: ₹8,90,000 paid to a bank account the vendor switched to six days earlier.', 'Large payment to a just-changed account', '',
-    () => moveToEl('[data-inv="INV-1037"]'), () => press('[data-inv="INV-1037"]'), () => sleep(900),
-    () => camTo(target(rectOf('.trail-wrap'), 20, 1.6), 1200));
-  const t = () => rectOf('.trail-wrap');
-  await beat('Three separate paths from that payment end at the same AP clerk.', '', '',
-    () => camTo(target({ x: t().x + t().w * .52, y: t().y + t().h * .42, w: t().w * .48, h: t().h * .58 }, 20, 2.0), 1200));
-  await beat('That clerk entered the new bank details, approved the payment, and owns the account.');
-  await beat('Ask the graph directly: who is connected to PAY-3410, and how?', 'Query the graph', '',
-    () => camTo(target(rectOf('#side'), 20, 1.7), 1100), () => moveToEl('[data-tab="ask"]'), () => press('[data-tab="ask"]'),
-    () => sleep(500), () => camTo(target(rectOf('#side'), 20, 1.7), 800), () => moveToEl('#runq'), () => press('#runq'), () => sleep(2600));
-  // 4. INV-1036: money came back; the Cypher behind every check
-  await beat('INV-1036: one payment, three invoices, two bank debits. One came back, but the books say paid.', 'Payment returned by the bank', '',
-    () => camTo(full, 1000), () => moveToEl('[data-inv="INV-1036"]'), () => press('[data-inv="INV-1036"]'), () => sleep(900),
-    () => camTo(target(rectOf('.trail-wrap'), 20, 1.6), 1200));
-  await beat('Every check is a plain Cypher file. The same files run here, in the CLI and for agents.', 'How the graph found it', '',
-    () => camTo(target(rectOf('.cols'), 20, 1.5), 1100), () => moveToEl('[data-tab="why"]'), () => press('[data-tab="why"]'),
-    () => sleep(400), () => camTo(target(rectOf('#side'), 20, 1.7), 900));
-  // 5. Terminal: command line, agent, Relate's own CLI (recorded output, replayed)
+  const trail = () => rectOf('.trail-wrap');
+  // 0. The app opens: logo intro, then six exceptions
+  // the intro is centred in the app's tall frame, so start the camera on the logo and pan up as it hands over
+  C.y = 1700 * K / 2 - 540; setCam();
+  await Promise.all([reloadApp('/web/#INV-1042'), sleep(3200), (async () => {
+    for (;;) { try { if (D().querySelector('#intro.out')) break; } catch {} await sleep(50); }
+    await camTo(full, 1100);
+  })()]);
+  await beat('Month-end: 26 invoices, six don’t reconcile. Trailmark walks each one as a Relate graph, in the browser.', 'Sample books · all data invented');
+  // 1. Break the books
+  await beat('Don’t take a demo’s word for it. Break the books yourself.', 'Break the books', '',
+    () => camTo(target(union(rectOf('.books'), rectOf('.breakbtn')), 30, 2.0), 1100), () => moveToEl('.breakbtn'), () => press('.breakbtn'),
+    () => sleep(700), () => camTo(target(trail(), 20, 1.6), 1200));
+  await beat('INV-1001 reconciles. Cut its receipt link: a real DELETE in the graph.', '', '',
+    () => moveToEl('.cutbtn'), () => sleep(700), () => press('.cutbtn'), () => sleep(1300));
+  const ms = (D().querySelector('.cut-note')?.textContent.match(/re-ran in ([\d.]+ ms)/) || [, 'milliseconds'])[1];
+  await beat(`All six checks re-ran in ${ms} and caught it: 7 exceptions, ₹39,648 more at risk.`, 'Caught', '',
+    () => camTo(target(union(rectOf('.cut-note'), rectOf('.books')), 20, 1.4), 1100));
+  await beat('The graph offers the same receipt back. One click links it; Restore puts the books back.', 'Fixed', 'ok',
+    () => camTo(target(rectOf('.finding'), 24, 1.6), 1000), () => moveToEl('[data-link]'), () => press('[data-link]'), () => sleep(900),
+    () => camTo(target(rectOf('.cut-note'), 20, 1.6), 800), () => moveToEl('.cut-note [data-reset]'), () => press('.cut-note [data-reset]'), () => sleep(600), () => camTo(full, 900));
+  // 2. INV-1042: the graph overrules the text match
+  await beat('INV-1042: no goods receipt. Text search scores GRN-5404 a perfect 1.00…', 'Invoice has no goods receipt', '',
+    () => moveToEl('[data-inv="INV-1042"]'), () => press('[data-inv="INV-1042"]'), () => sleep(900), () => camTo(target(trail(), 20, 1.6), 1200));
+  await beat('…and the graph rules it out: it already belongs to PO-7604. GRN-5520 is the real one.', '', '',
+    () => camTo(target({ x: trail().x, y: trail().y + trail().h * .08, w: trail().w * .55, h: trail().h * .7 }, 20, 2.0), 1200));
+  // 3. INV-1037: follow the money to our own clerk
+  await beat('INV-1037: ₹8,90,000 paid to an account the vendor switched to six days earlier.', 'Large payment to a just-changed account', '',
+    () => camTo(full, 900), () => moveToEl('[data-inv="INV-1037"]'), () => press('[data-inv="INV-1037"]'), () => sleep(900),
+    () => camTo(target(trail(), 20, 1.6), 1200));
+  await beat('Follow the money: payment, account, owner. The trail ends at our own AP clerk.', '', '',
+    () => camTo(target({ x: trail().x + trail().w * .5, y: trail().y, w: trail().w * .5, h: trail().h }, 20, 2.0), 1200), () => sleep(3000));
+  await beat('One quantified path pattern finds every route from the payment to any employee.', 'How the graph found it', '',
+    () => camTo(target(rectOf('#side'), 20, 1.7), 1100));
+  // 4. Terminal: the same file and the same Cypher, from the command line and an agent (recorded output, replayed)
   await Promise.all([camTo(full, 700), moveTo(1700, 1180, 700)]);
   await termIn();
-  await beat('The same graph from the command line. The books are one file: store/trailmark.rl.', 'Python · Relate embedded', '',
+  await beat('Same graph from the command line. The books are one file: store/trailmark.rl.', 'Python · Relate embedded', '',
     () => typeLines(['python -m trailmark scan']),
     () => print(ansi(window.CAPTURE.scan).filter((l, i, a) => !(l === '' && i === a.length - 1)), 40));
-  await beat('The browser fix stayed in its tab, so the file still shows six exceptions.');
   const resp = JSON.parse(JSON.parse(window.CAPTURE.mcp.trim().split('\n').pop()).result.content[0].text);
-  await beat('AI agents get MCP tools: read-only by default, plus one guarded write that records who and why.', 'Any MCP agent', '',
+  await beat('AI agents get MCP tools: read-only, plus one guarded write that records who and why.', 'Any MCP agent', '',
     () => typeLines(['python -m trailmark mcp'], '# tool server for AI agents (stdio)'),
     () => print([
       '<span class="cm"># an agent’s request and the server’s reply (excerpt)</span>',
       '<span class="k">→ tools/call</span> <span class="c">link_receipt</span>',
       '  <span class="j">{"grn_id": "GRN-5520", "po_id": "PO-7713",</span>',
       '  <span class="j"> "note": "Stores keyed PO-7731; same vendor, item and quantity as PO-7713"}</span>',
-    ], 220),
-    () => sleep(500),
+    ], 200),
+    () => sleep(400),
     () => print([
       `<span class="k">← result</span>  <span class="ok">{"ok": ${resp.ok}, "was_keyed_as": "${resp.was_keyed_as}", "linked_by": "${resp.linked_by}",</span>`,
       `<span class="ok">   "invoices_now": [{"invoice": "${resp.invoices_now[0].invoice}", "status": "${resp.invoices_now[0].status}"}]}</span>`,
-    ], 220));
-  await beat('Relate’s own CLI reads the same file, and the agent’s fix is now on disk.', 'relate CLI', '',
+    ], 200));
+  await beat('Relate’s own CLI reads the same file, and the agent’s fix is on disk.', 'relate CLI', '',
     () => typeLines(['relate --read-only -d store/trailmark.rl --mode table \\',
       '  "MATCH (g:GoodsReceipt {id: \'GRN-5520\'})-[r:RECEIVED_AGAINST]->(po:PurchaseOrder)',
       '   RETURN g.id AS receipt, po.id AS po, r.linked_by AS linked_by, r.note AS note"']),
-    () => print(window.CAPTURE.relate.trim().split('\n').map((l) => `<span class="c">${esc(l)}</span>`), 90),
-    () => sleep(3800));
+    () => print(window.CAPTURE.relate.trim().split('\n').map((l) => `<span class="c">${esc(l)}</span>`), 80),
+    () => sleep(2200));
+  const tests = window.CAPTURE.tests.trim().split('\n').filter((l) => l.trim() && !l.startsWith('The browser'))
+    .map((l) => l.replace(/ \(tests\.[^)]*\)/, '').replace(/^(test_8\S*)$/, '$1 ... ok'));
+  await beat('And the cut is tested on every push: 19 receipt links, each cut caught exactly once.', 'Tests · CI on Windows, macOS, Linux', 'ok',
+    () => typeLines(['python -m unittest -v'], '# test_8 cuts every eligible receipt link'),
+    () => print(tests.map((l) => /test_8/.test(l) ? `<span class="ok">${esc(l)}</span>` : /^OK$/.test(l) ? `<span class="ok">${esc(l)}</span>` : `<span class="c">${esc(l)}</span>`), 110),
+    () => sleep(2400));
   await capOff();
   await termOut();
-  // 6. Close
+  // 5. Close
   await anim($('#end'), { opacity: 0 }, { opacity: 1 }, 900, 'ease-out');
-  await sleep(1500);
+  await sleep(2500);
   window.timelineDone = true;
 };
 </script>
