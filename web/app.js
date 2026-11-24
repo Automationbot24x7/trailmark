@@ -745,6 +745,9 @@ async function boot() {
     eng.innerHTML = `<span class="pulse"></span>Relate 1.0.1 · WebAssembly · <b>${n}</b> nodes · <b>${r}</b> rels · built in ${Math.round(performance.now() - t1)} ms`;
     introDone();
     select(location.hash.slice(1) || 'INV-1042');
+    // ?cut=INV-1001 opens that invoice with its receipt link already cut (for screenshots and the video)
+    const cq = new URLSearchParams(location.search).get('cut');
+    if (cq && cutFor(cq)) { select(cq, false); const c = cutFor(cq); cutLink(c.grn, c.po); }
     const ap = new URLSearchParams(location.search).get('apply');
     if (ap) { const [g, p] = ap.split(','); linkReceipt(g, p); }
   } catch (err) {
