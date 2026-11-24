@@ -57,12 +57,15 @@ function explain(id) {
     const m = r.match(/^(\S+) \(([\d.]+)(?:, already received against ([^)\s]+))?/);
     if (m) rejected[m[1]] = { score: m[2], po: m[3] || null, text: r };
   }
+  const shown = Object.keys(rejected).slice(0, 1);
+  for (const g of Object.keys(rejected)) if (!shown.includes(g)) delete rejected[g];
+  const moreRejected = found.reduce((a, f) => a + Math.max(0, (f.suggestion?.rejected || []).length - 1), 0);
   const extra = [...new Set(found.flatMap((f) => [...(f.path || []), ...(f.suggestion ? [f.suggestion.grn] : [])])
     .concat(Object.entries(rejected).flatMap(([g, r]) => (r.po ? [g, r.po] : [g]))))];
   const env = run(S.Q.trail.text, { id, extra });
   S.timings.trail = env.elapsed_ms;
   const t = env.rows[0];
-  return { inv, status: S.states[id], findings: found, nodes: t.nodes, rels: t.rels.filter(Boolean), rejected };
+  return { inv, status: S.states[id], findings: found, nodes: t.nodes, rels: t.rels.filter(Boolean), rejected, moreRejected };
 }
 
 // ---------------------------------------------------------------- formatting
@@ -304,7 +307,7 @@ function renderTrail(ex, animate) {
     const rej = ex.rejected?.[it.id];
     const ev = L.ev.has(it.id);
     const cls = ['card', isFixed ? 'fixed' : isCand ? 'cand' : rej ? 'rej' : '', ev && !isFixed ? 'ev' : '', ev && L.high ? 'high' : '', it.id === ex.inv.id ? 'focus' : '', animate ? 'appear' : ''].join(' ');
-    const kind = isCand ? 'Candidate receipt' : isFixed ? 'Receipt · linked now' : rej ? `Ruled out · text score ${rej.score}` : KIND[it.label];
+    const kind = isCand ? 'Candidate receipt' : isFixed ? 'Receipt · linked now' : rej ? `Ruled out · score ${rej.score}` : KIND[it.label];
     const l2b = rej ? (rej.po ? `already received against ${rej.po}` : 'different quantity') : l2;
     const tip = rej ? rej.text : GLOSS[it.label];
     cards += `<g class="${cls}" style="animation-delay:${delay}ms" data-id="${it.id}">${tip ? `<title>${esc(tip)}</title>` : ''}
@@ -312,7 +315,7 @@ function renderTrail(ex, animate) {
       <text class="k" x="${x + 12}" y="${y + 18}">${esc(kind)}</text>
       <text class="i" x="${x + 12}" y="${y + 37}">${esc(it.id)}</text>${rej ? `<line class="strike" x1="${x + 10}" x2="${x + 14 + it.id.length * 8.9}" y1="${y + 32}" y2="${y + 32}"/>` : ''}
       ${fit('l1', x + 12, y + 54, l1, 23)}
-      ${fit('l2', x + 12, y + 68, l2b, 26)}
+      ${fit('l2', x + 12, y + 68, l2b, 26)}${rej && ex.moreRejected ? `<text class="more" x="${x + 12}" y="${y + H + 14}">+${ex.moreRejected} more ruled out (see the finding)</text>` : ''}
       ${ev && !isFixed ? `<rect class="flag" x="${x + W - 10}" y="${y}" width="10" height="10"/>` : ''}</g>`;
   }
   const marker = (id, color) => `<marker id="arr-${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="${color}"/></marker>`;
@@ -339,6 +342,7 @@ function placeCut(svg) {
   if (!e) return b.remove();
   const pt = e.getPointAtLength(e.getTotalLength() / 2);
   b.setAttribute('transform', `translate(${pt.x} ${pt.y})`); b.setAttribute('opacity', '1');
+  svg.querySelector(`.elab[data-k="${e.dataset.k}"]`)?.setAttribute('transform', 'translate(0 -14)');
 }
 function cutLink(grn, po) {
   const inv = S.sel, svg = $('svg.trail');
@@ -389,9 +393,20 @@ function walkSteps(ex) {
     if (p.length && p[p.length - 1] === ex.inv.id && p[0] !== ex.inv.id) p = p.reverse();
     // the evidence can branch (one account, two people): each hop starts from the latest visited card it is joined to
     const joined = (x, y) => ex.rels.some((r) => (r.from === x && r.to === y) || (r.from === y && r.to === x));
-    for (let i = 1; i < p.length; i++) {
-      const from = p.slice(0, i).reverse().find((x) => joined(x, p[i])) || p[i - 1];
-      steps.push([from, p[i]]);
+    // walk as a chain that follows the money first (invoice, payment, account, its owner), then the paperwork and approvals;
+    // when the current card has no unvisited neighbour, back up to the last card that has one
+    const ORDER = ['SETTLES', 'PAID_TO', 'HAS_ACCOUNT', 'CLEARS', 'REVERSES', 'BILLS', 'RECEIVED_AGAINST', 'NEW_ACCOUNT', 'ENTERED', 'APPROVED', 'REPORTS'];
+    const rank = (x, y) => Math.min(...ex.rels.filter((r) => (r.from === x && r.to === y) || (r.from === y && r.to === x)).map((r) => (ORDER.indexOf(r.type) + 1) || 99));
+    const seen = [p.includes(ex.inv.id) ? ex.inv.id : p[0]];
+    while (seen.length < p.length) {
+      const left = p.filter((x) => !seen.includes(x));
+      let from = null, to = null;
+      for (const x of [...seen].reverse()) {
+        const opts = left.filter((y) => joined(x, y)).sort((u, v) => rank(x, u) - rank(x, v));
+        if (opts.length) { from = x; to = opts[0]; break; }
+      }
+      if (!to) { from = seen[seen.length - 1]; to = left[0]; }
+      steps.push([from, to]); seen.push(to);
     }
     if (f.missing) steps.push([f.missing.after, '__ghost_' + f.missing.label, KIND[f.missing.label] || 'link']);
   }
@@ -456,7 +471,7 @@ function walk(ex, quiet = false) {
 function hopBadge(el, a, b) {
   const svg = $('svg.trail'), layer = svg?.querySelector('.hops'); if (!layer) return;
   let pt;
-  if (el) pt = el.getPointAtLength(el.getTotalLength() / 2);
+  if (el) pt = el.getPointAtLength(el.getTotalLength() * (el.dataset.t ? 0.3 : 0.5));
   else { const A = LAST.pos[a], B = LAST.pos[b]; if (!A || !B) return; pt = { x: (A.x + B.x + W) / 2, y: (A.y + B.y + H) / 2 }; }
   const n = layer.children.length + 1;
   layer.insertAdjacentHTML('beforeend', `<g class="hopn${!el || el.classList.contains('brk') ? ' miss' : ''}" transform="translate(${pt.x} ${pt.y})"><circle r="8.5"/><text y="3.6" text-anchor="middle">${n}</text></g>`);
@@ -560,6 +575,7 @@ function renderStage(animate = true) {
       <div class="f-top"><span class="sev ${f.severity}">${f.severity.toUpperCase()}</span><span class="f-title">${esc(f.title)}</span><span class="f-amt">${inr(f.amount)}</span></div>
       <h3 class="f-head">${rich(f.headline)}</h3>
       <p class="f-detail">${rich(f.detail)}</p>
+      ${nextStep(f) ? `<p class="f-next"><span class="lbl">Next step</span>${esc(nextStep(f))}</p>` : ''}
       <div class="f-path"><span class="lbl">Evidence</span>${(f.path || []).map((id) => `<span class="chip" data-id="${id}">${id}</span>`).join('<span class="arr">·</span>')}</div>
       ${f.suggestion ? `<div class="fix"><div><p><b>Suggested fix:</b> ${rich(f.suggestion.text)}</p>
         <small>Vector search over receipt text from the same vendor scored it ${Number(f.suggestion.similarity).toFixed(2)}${(f.suggestion.rejected || []).length ? `; the graph ruled out ${f.suggestion.rejected.map(esc).join(', ')}` : ''}. The link is written to the graph in this tab only; reload to undo.</small></div>
@@ -592,6 +608,8 @@ function renderStage(animate = true) {
   placeCut($('svg.trail'));
   walk(ex);
 }
+
+function nextStep(f) { return S.Q.checks.find((c) => c.file === f.file)?.next || ''; }
 
 function fixedNote(grn, v) {
   return `<div class="fixed-note"><b>Linked ${grn} → ${v.po}</b> in this tab, recorded on the relationship as
@@ -632,7 +650,7 @@ function renderSide(ex) {
     side.innerHTML = tabs + files.map((c) => `
       <p class="q-why">${esc(c.graph || c.plain)}</p>
       <div class="q-file"><span>${c.file}</span><span>${fmtMs(S.timings[c.file] ?? S.timings.trail)} in your browser</span></div>
-      <pre class="cy">${highlight(c.text.split('\n').filter((l) => !/^\/\/\s*(title|plain|graph):/.test(l)).join('\n'))}</pre>`).join('<div style="height:18px"></div>');
+      <pre class="cy">${highlight(c.text.split('\n').filter((l) => !/^\/\/\s*(title|plain|graph|next):/.test(l)).join('\n'))}</pre>`).join('<div style="height:18px"></div>');
   } else {
     side.innerHTML = tabs + `<div class="console">
       <div class="presets">${PRESETS.map(([n], i) => `<button class="preset" data-preset="${i}">${esc(n)}</button>`).join('')}</div>
@@ -738,7 +756,7 @@ async function boot() {
     S.graph = graph; S.Q = Q;
     const t1 = performance.now();
     loadGraph();
-    scan();
+    scan(); explain('INV-1001'); scan(); // the first run warms the engine; show the second run's timings
     findCuttable();
     const n = graph.nodes.reduce((a, g) => a + g.rows.length, 0), r = graph.rels.reduce((a, g) => a + g.rows.length, 0);
     eng.classList.add('ready');

@@ -1,6 +1,7 @@
 // title: Payment came back from the bank
 // plain: One payment can settle several invoices and leave the bank as several debits. If a debit is later returned, the books still say "paid" but the money never reached the vendor.
 // graph: Invoice <-SETTLES- Payment <-CLEARS- BankLine, then a quantified path pattern follows any chain of REVERSES lines back. The shortfall is charged to the latest invoices first.
+// next: Confirm the vendor's current bank details on a known phone number, then pay the returned amount again.
 MATCH (p:Payment)<-[:CLEARS]-(out:BankLine)
 OPTIONAL MATCH (out)((:BankLine)<-[:REVERSES]-(:BankLine)){1,3}(back:BankLine)
 WITH p, collect(DISTINCT out) AS debits, collect(DISTINCT back) AS returns

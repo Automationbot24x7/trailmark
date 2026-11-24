@@ -1,6 +1,7 @@
 // title: Billed more than was received
 // plain: Add up every receipt on the purchase order and every invoice billed against it. If the vendor billed more units than arrived, the difference was paid for nothing.
 // graph: Many receipts and many invoices meet at one PurchaseOrder; both sides are summed across the fan-in. Duplicate invoices are left to check 4.
+// next: Pay only for what was received and ask the vendor for a credit note for the rest.
 MATCH (po:PurchaseOrder)<-[:BILLS]-(i:Invoice)
 WHERE NOT EXISTS {
   MATCH (po)<-[:BILLS]-(j:Invoice)

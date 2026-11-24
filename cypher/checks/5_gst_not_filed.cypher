@@ -1,6 +1,7 @@
 // title: Tax credit claimed, supplier never filed
 // plain: We claimed the GST input credit on this invoice, but it is missing from our GSTR-2B because the supplier never reported it in their GSTR-1, so the credit can be reversed with interest.
 // graph: Invoice {itc_claimed: true} with no incoming REPORTS from a GstrLine, while the same supplier's other invoices are reported - so it is this invoice, not the supplier, that is missing.
+// next: Ask the supplier to report the invoice in their GSTR-1, and hold back the tax amount until it shows in our GSTR-2B.
 MATCH (i:Invoice {itc_claimed: true})-[:ISSUED_BY]->(v:Vendor)
 WHERE NOT EXISTS { (:GstrLine)-[:REPORTS]->(i) }
 OPTIONAL MATCH (other:GstrLine)-[:REPORTS]->(:Invoice)-[:ISSUED_BY]->(v)

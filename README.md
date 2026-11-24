@@ -4,9 +4,9 @@
 
 **Why doesn't this invoice reconcile?** Trailmark follows an invoice through the accounts-payable trail (purchase order, goods receipt, invoice, payment, bank line, our GSTR-2B) as a [Relate](https://github.com/relatedb/relate) graph. It points at the exact link that is broken and shows the path that proves it.
 
-[**Live demo**](https://automationbot24x7.github.io/trailmark/) (runs in your browser, nothing to install) · [**Demo video (1:42)**](https://youtu.be/RA4vIVOmemc) · Python, CLI and AI-agent tools below
+[**Live demo**](https://automationbot24x7.github.io/trailmark/web/) (runs in your browser, nothing to install) · [**Demo video (1:42)**](https://youtu.be/RA4vIVOmemc) · Python, CLI and AI-agent tools below
 
-![Trailmark showing invoice INV-1042: the goods-receipt link is missing, and a receipt keyed against a non-existent PO is suggested as the fix](docs/shot-INV-1042.png)
+![Trailmark showing invoice INV-1042: the goods-receipt link is missing, a receipt keyed against a non-existent PO is suggested as the fix, and a look-alike receipt with a perfect text score is struck out because it already belongs to PO-7604](docs/shot-INV-1042.png)
 
 > **Sample data.** Every vendor, person, GSTIN, bank account and amount in this repo is invented. GSTINs carry `SAMPL` in the PAN slot and IFSC codes start with `SMPL`, so nothing can be mistaken for a real registration or account.
 
@@ -14,10 +14,12 @@
 
 Open any reconciled invoice in the live demo (or press **Break the books**) and cut its receipt link with the scissors. The link is removed from the Relate graph in your tab with a real `DELETE`, all six checks run again in a few milliseconds, and the invoice becomes an exception with the same receipt offered back as the fix. The test suite does the same for all 19 such invoices on every push: each cut is caught exactly once and nothing else changes ([`cypher/cuttable.cypher`](cypher/cuttable.cypher) picks them, `test_8` in [`tests/test_trailmark.py`](tests/test_trailmark.py) checks them).
 
+![INV-1001 after its receipt link was cut: the banner reads 7 exceptions (was 6), ₹13,29,164 at risk; the trail shows the missing receipt, the same receipt offered back as the fix, and a look-alike receipt ruled out because it already belongs to PO-7720](docs/shot-cut.png)
+
 ## Why a graph, not six SQL joins
 
-- **Check 3** follows a chain of bank reversals with a quantified path pattern (`{1,3}`); in SQL that is a recursive query.
-- **Check 6** looks at every 1 to 3 hop path from a payment to any employee over five relationship types at once: who approved it, who entered the new bank details, who owns the receiving account.
+- **Check 3** follows a chain of bank reversals with a quantified path pattern (`{1,3}`); in SQL that is three self-joins or a recursive query.
+- **Check 6** looks at every 1 to 3 hop path from a payment to any employee over five relationship types at once: who approved it, who entered the new bank details, who owns the receiving account ([side by side with SQL below](#check-6-in-cypher-and-in-sql)).
 - **Check 1** runs a vector search and graph rules in one statement. On `INV-1042` the text match scores `GRN-5404` highest (1.00), and the graph rules it out because it is already received against `PO-7604`; the app draws that ruled-out receipt struck through, next to the PO it belongs to.
 - **One file holds it all:** `store/trailmark.rl` is committed. The browser, the CLI and the AI-agent server run the same `.cypher` files against it, and a fix made from the CLI or an agent is written into it with who made it and why.
 
@@ -147,7 +149,7 @@ python -m trailmark link GRN-5520 PO-7713 --note "PO digits swapped at stores"  
 python -m trailmark build                                                       # rebuild store/trailmark.rl from the CSVs
 ```
 
-Other commands: `python -m trailmark cypher "MATCH (v:Vendor) RETURN v.name"` (read-only query), `python -m trailmark export` (refresh the browser copy), `python -m unittest -v` (seven end-to-end tests).
+Other commands: `python -m trailmark cypher "MATCH (v:Vendor) RETURN v.name"` (read-only query), `python -m trailmark export` (refresh the browser copy), `python -m unittest -v` (eight end-to-end tests).
 
 **Your own ledgers:** replace the CSVs in `data/sample/` with your own exports, keeping the column headers, then run `python -m trailmark build`. Each file's columns are listed in its header row; `data/generate_sample.py` shows how the sample was made.
 
@@ -199,7 +201,7 @@ In the browser the same fix is one button, and the trail turns green:
 
 [`.mcp.json`](.mcp.json) registers it (run your agent from the repo folder with the virtual environment active), alongside Relate's own `relate serve --mcp stdio --read-only` for raw access. [`AGENTS.md`](AGENTS.md) has the instructions and the questions used in the demo. Running `relate skill install` also teaches coding agents Relate's Cypher dialect.
 
-## Why a graph
+## Check 6 in Cypher and in SQL
 
 Check 6 asks: which of our own people are within three hops of this payment, and how? In Cypher, that is one pattern over a list of relationship types:
 

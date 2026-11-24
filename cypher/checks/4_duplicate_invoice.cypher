@@ -1,6 +1,7 @@
 // title: Same invoice paid twice
 // plain: The vendor's invoice number was keyed twice in slightly different forms (BOS/889 and BOS-889). Both copies were approved and both were paid.
 // graph: Two Invoice nodes share a Vendor, a normalised invoice number, an amount and a PurchaseOrder; each has its own Payment and BankLine.
+// next: Recover the second payment from the vendor and cancel the duplicate invoice.
 MATCH (a:Invoice)-[:ISSUED_BY]->(v:Vendor)<-[:ISSUED_BY]-(b:Invoice)
 WHERE a.id < b.id AND a.norm_no = b.norm_no AND a.total = b.total
 OPTIONAL MATCH (b)-[:BILLS]->(po:PurchaseOrder)<-[:BILLS]-(a)

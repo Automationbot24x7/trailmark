@@ -23,7 +23,7 @@ await send('Page.enable');
 for (const spec of process.argv.slice(3)) {
   const name = spec.slice(0, spec.indexOf('=')), rest = spec.slice(spec.indexOf('=') + 1);
   const [h, w] = (process.env.SHOT_SIZE || '1440x1500').split('x').map(Number);
-  await send('Emulation.setDeviceMetricsOverride', { width: h, height: w, deviceScaleFactor: 1, mobile: false });
+  await send('Emulation.setDeviceMetricsOverride', { width: h, height: w, deviceScaleFactor: +(process.env.SHOT_DPR || 1), mobile: false });
   await send('Page.navigate', { url: `http://127.0.0.1:8765/web/?nointro&s=${Date.now()}${rest.startsWith('#') ? '' : '&'}${rest}` });
   await sleep(+(process.env.SHOT_WAIT || 7000));
   const { data } = await send('Page.captureScreenshot', { format: 'png' });

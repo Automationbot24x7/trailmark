@@ -1,6 +1,7 @@
 // title: Large payment to a just-changed bank account
 // plain: The vendor's bank details changed shortly before a large payment. Then follow every short path from that payment to our own people: who approved it, who entered the new account, who owns it.
 // graph: Payment -PAID_TO-> BankAccount <-HAS_ACCOUNT {since}- Vendor, then a quantified path pattern of 1-3 hops over PAID_TO|HAS_ACCOUNT|NEW_ACCOUNT|ENTERED|APPROVED from the Payment to any Employee.
+// next: Hold further payments to this account, call the vendor on a known number to confirm the change, and escalate to internal audit.
 MATCH (i:Invoice)<-[:SETTLES]-(p:Payment)-[:PAID_TO]->(ba:BankAccount)<-[h:HAS_ACCOUNT]-(v:Vendor)
 WHERE p.amount >= 500000 AND duration.inDays(date(h.since), date(p.date)).days <= 14
 OPTIONAL MATCH (c:BankChange)-[:NEW_ACCOUNT]->(ba)
