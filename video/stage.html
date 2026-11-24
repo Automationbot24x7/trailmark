@@ -132,8 +132,8 @@ function ansi(text) {
     return html + esc(line.slice(last)) + '</span>'.repeat(open);
   });
 }
-async function termIn() { await Promise.all([anim($('#term'), { transform: 'translateY(1150px)' }, { transform: 'translateY(0)' }, 900), anim($('#dim'), { opacity: 0 }, { opacity: 1 }, 900)]); }
-async function termOut() { await Promise.all([anim($('#term'), { transform: 'translateY(0)' }, { transform: 'translateY(1150px)' }, 800), anim($('#dim'), { opacity: 1 }, { opacity: 0 }, 800)]); }
+async function termIn() { ev('whoosh'); await Promise.all([anim($('#term'), { transform: 'translateY(1150px)' }, { transform: 'translateY(0)' }, 900), anim($('#dim'), { opacity: 0 }, { opacity: 1 }, 900)]); }
+async function termOut() { ev('whoosh'); await Promise.all([anim($('#term'), { transform: 'translateY(0)' }, { transform: 'translateY(1150px)' }, 800), anim($('#dim'), { opacity: 1 }, { opacity: 0 }, 800)]); }
 
 // ---- readiness: the app's engine has loaded and fonts are in
 window.stageReady = false;
@@ -148,6 +148,8 @@ window.stageReady = false;
 })();
 
 window.timelineDone = false;
+window.EV = [];
+const ev = (k, extra = {}) => window.EV.push({ k, w: Date.now() / 1000, ...extra });
 
 // A beat: the caption appears while its actions start; it stays at least 5 s and about 3 words a second.
 const words = (t) => t.replace(/<[^>]+>/g, '').trim().split(/\s+/).length;
@@ -160,6 +162,7 @@ async function beat(text, kicker, tone, ...acts) {
 async function moveToEl(sel, idx = 0) { const r = rectOf(sel, idx); await moveTo(r.x + Math.min(r.w * .5, 160), r.y + r.h * .5); return r; }
 async function press(sel, idx = 0) {
   const r = rectOf(sel, idx);
+  ev(sel === '.cutbtn' ? 'snip' : 'click');
   ring.style.left = P.x + 'px'; ring.style.top = P.y + 'px';
   ring.animate([{ opacity: 1, transform: 'scale(.5)' }, { opacity: 0, transform: 'scale(1.5)' }], { duration: 420, easing: 'ease-out' });
   await sleep(120);
@@ -172,13 +175,14 @@ async function reloadApp(url) {
   for (;;) { try { if (D().querySelector('#engine.ready') && D().querySelector('svg.trail') && !D().querySelector('#intro')) break; } catch {} await sleep(100); }
 }
 async function typeLines(cmdLines, note = '') {
+  ev('typeStart');
   for (let j = 0; j < cmdLines.length; j++) {
     const pfx = j === 0 ? '<span class="p">$</span> ' : '<span class="p">&gt;</span> ';
     lines.push(''); const i = lines.length - 1; const cmd = cmdLines[j];
     for (let k = 1; k <= cmd.length; k += 2) { lines[i] = pfx + `<span class="c">${esc(cmd.slice(0, k + 1))}</span>`; show(true); await sleep(22); }
     if (j === 0 && note) lines[i] += `  <span class="cm">${esc(note)}</span>`;
   }
-  show(false); await sleep(300);
+  show(false); ev('typeEnd'); await sleep(300);
 }
 
 window.startTimeline = async () => {
@@ -187,6 +191,8 @@ window.startTimeline = async () => {
   // 0. The app opens: logo intro, then six exceptions
   // the intro is centred in the app's tall frame, so start the camera on the logo and pan up as it hands over
   C.y = 1700 * K / 2 - 540; setCam();
+  ev('start');
+  (async () => { for (;;) { try { if (D().querySelector('#intro')) { ev('intro'); break; } } catch {} await sleep(20); } })();
   await Promise.all([reloadApp('/web/#INV-1042'), sleep(3200), (async () => {
     for (;;) { try { if (D().querySelector('#intro.out')) break; } catch {} await sleep(50); }
     await camTo(full, 1100);
@@ -197,12 +203,13 @@ window.startTimeline = async () => {
     () => camTo(target(union(rectOf('.books'), rectOf('.breakbtn')), 30, 2.0), 1100), () => moveToEl('.breakbtn'), () => press('.breakbtn'),
     () => sleep(700), () => camTo(target(trail(), 20, 1.6), 1200));
   await beat('INV-1001 reconciles. Cut its receipt link: a real DELETE in the graph.', '', '',
-    () => moveToEl('.cutbtn'), () => sleep(700), () => press('.cutbtn'), () => sleep(1300));
+    () => moveToEl('.cutbtn'), () => sleep(2300), () => press('.cutbtn'), () => sleep(560), () => ev('alert'), () => sleep(740));
   const ms = (D().querySelector('.cut-note')?.textContent.match(/re-ran in ([\d.]+ ms)/) || [, 'milliseconds'])[1];
   await beat(`All six checks re-ran in ${ms} and caught it: 7 exceptions, ₹39,648 more at risk.`, 'Caught', '',
     () => camTo(target(union(rectOf('.cut-note'), rectOf('.books')), 20, 1.4), 1100));
   await beat('The graph offers the same receipt back. One click links it; Restore puts the books back.', 'Fixed', 'ok',
-    () => camTo(target(rectOf('.finding'), 24, 1.6), 1000), () => moveToEl('[data-link]'), () => press('[data-link]'), () => sleep(900),
+    () => camTo(target(rectOf('.finding'), 24, 1.6), 1000), () => moveToEl('[data-link]'), () => press('[data-link]'), () => ev('ok'), () => sleep(500),
+    () => camTo(target(trail(), 20, 1.6), 900), () => sleep(2000),
     () => camTo(target(rectOf('.cut-note'), 20, 1.6), 800), () => moveToEl('.cut-note [data-reset]'), () => press('.cut-note [data-reset]'), () => sleep(600), () => camTo(full, 900));
   // 2. INV-1042: the graph overrules the text match
   await beat('INV-1042: no goods receipt. Text search scores GRN-5404 a perfect 1.00…', 'Invoice has no goods receipt', '',
@@ -210,17 +217,18 @@ window.startTimeline = async () => {
   await beat('…and the graph rules it out: it already belongs to PO-7604. GRN-5520 is the real one.', '', '',
     () => camTo(target({ x: trail().x, y: trail().y + trail().h * .08, w: trail().w * .55, h: trail().h * .7 }, 20, 2.0), 1200));
   // 3. INV-1037: follow the money to our own clerk
+  await capOff();
+  await camTo(full, 900); await moveToEl('[data-inv="INV-1037"]'); await press('[data-inv="INV-1037"]'); await sleep(700);
   await beat('INV-1037: ₹8,90,000 paid to an account the vendor switched to six days earlier.', 'Large payment to a just-changed account', '',
-    () => camTo(full, 900), () => moveToEl('[data-inv="INV-1037"]'), () => press('[data-inv="INV-1037"]'), () => sleep(900),
     () => camTo(target(trail(), 20, 1.6), 1200));
-  await beat('Follow the money: payment, account, owner. The trail ends at our own AP clerk.', '', '',
+  await beat('Follow the money: payment, account, owner. The owner is our own AP clerk.', '', '',
     () => camTo(target({ x: trail().x + trail().w * .5, y: trail().y, w: trail().w * .5, h: trail().h }, 20, 2.0), 1200), () => sleep(3000));
   await beat('One quantified path pattern finds every route from the payment to any employee.', 'How the graph found it', '',
     () => camTo(target(rectOf('#side'), 20, 1.7), 1100));
   // 4. Terminal: the same file and the same Cypher, from the command line and an agent (recorded output, replayed)
   await Promise.all([camTo(full, 700), moveTo(1700, 1180, 700)]);
   await termIn();
-  await beat('Same graph from the command line. The books are one file: store/trailmark.rl.', 'Python · Relate embedded', '',
+  await beat('Same graph from the command line: the same six checks, the same six exceptions.', 'Python · Relate embedded', '',
     () => typeLines(['python -m trailmark scan']),
     () => print(ansi(window.CAPTURE.scan).filter((l, i, a) => !(l === '' && i === a.length - 1)), 40));
   const resp = JSON.parse(JSON.parse(window.CAPTURE.mcp.trim().split('\n').pop()).result.content[0].text);
@@ -237,7 +245,7 @@ window.startTimeline = async () => {
       `<span class="k">← result</span>  <span class="ok">{"ok": ${resp.ok}, "was_keyed_as": "${resp.was_keyed_as}", "linked_by": "${resp.linked_by}",</span>`,
       `<span class="ok">   "invoices_now": [{"invoice": "${resp.invoices_now[0].invoice}", "status": "${resp.invoices_now[0].status}"}]}</span>`,
     ], 200));
-  await beat('Relate’s own CLI reads the same file, and the agent’s fix is on disk.', 'relate CLI', '',
+  await beat('Relate’s own CLI reads the same file, store/trailmark.rl, and the agent’s fix is on disk.', 'relate CLI', '',
     () => typeLines(['relate --read-only -d store/trailmark.rl --mode table \\',
       '  "MATCH (g:GoodsReceipt {id: \'GRN-5520\'})-[r:RECEIVED_AGAINST]->(po:PurchaseOrder)',
       '   RETURN g.id AS receipt, po.id AS po, r.linked_by AS linked_by, r.note AS note"']),
@@ -252,6 +260,7 @@ window.startTimeline = async () => {
   await capOff();
   await termOut();
   // 5. Close
+  ev('end');
   await anim($('#end'), { opacity: 0 }, { opacity: 1 }, 900, 'ease-out');
   await sleep(2500);
   window.timelineDone = true;

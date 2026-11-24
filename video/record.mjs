@@ -56,6 +56,7 @@ await sleep(400);
 recording = false;
 await send('Page.stopScreencast');
 writeFileSync(join(OUT, 'frames.json'), JSON.stringify(frames));
+writeFileSync(join(OUT, 'events.json'), JSON.stringify(await evaluate('JSON.stringify(window.EV)').then(JSON.parse)));
 const dur = frames.at(-1).t - frames[0].t;
 console.log(`${frames.length} frames over ${dur.toFixed(1)} s (${(frames.length / dur).toFixed(1)} fps) -> ${OUT}`);
 chrome.kill();

@@ -4,7 +4,7 @@
 
 **Why doesn't this invoice reconcile?** Trailmark follows an invoice through the accounts-payable trail (purchase order, goods receipt, invoice, payment, bank line, our GSTR-2B) as a [Relate](https://github.com/relatedb/relate) graph. It points at the exact link that is broken and shows the path that proves it.
 
-[**Live demo**](https://automationbot24x7.github.io/trailmark/web/) (runs in your browser, nothing to install) · [**Demo video (1:36)**](https://youtu.be/xCxYmnvhct0) · Python, CLI and AI-agent tools below
+[**Live demo**](https://automationbot24x7.github.io/trailmark/web/) (runs in your browser, nothing to install) · [**Demo video (1:36)**](https://youtu.be/ksNXmP74yZM) · Python, CLI and AI-agent tools below
 
 ![Trailmark showing invoice INV-1042: the goods-receipt link is missing, a receipt keyed against a non-existent PO is suggested as the fix, and a look-alike receipt with a perfect text score is struck out because it already belongs to PO-7604](docs/shot-INV-1042.png)
 
@@ -251,7 +251,7 @@ tests/            end-to-end tests (standard library only)
 
 ## Demo video
 
-[Watch on YouTube (1:36)](https://youtu.be/xCxYmnvhct0): one continuous take. It opens on Break the books (a receipt link is cut, the checks catch it, the fix is linked and the books restored), then INV-1042 and INV-1037 in the app, the command line, an AI agent fixing INV-1042 over MCP, and Relate's own CLI reading the fix from `store/trailmark.rl`, and the test that cuts every eligible receipt link. The terminal output is real, recorded and replayed. The video is made by [`video/`](video/): `stage.html` is the take, `record.mjs` records it with Chrome's screencast, and `build.py` assembles it with ffmpeg.
+[Watch on YouTube (1:36)](https://youtu.be/ksNXmP74yZM): one continuous take. It opens on Break the books (a receipt link is cut, the checks catch it, the fix is linked and the books restored), then INV-1042 and INV-1037 in the app, the command line, an AI agent fixing INV-1042 over MCP, and Relate's own CLI reading the fix from `store/trailmark.rl`, and the test that cuts every eligible receipt link. The terminal output is real, recorded and replayed. The video is made by [`video/`](video/): `stage.html` is the take, `record.mjs` records it with Chrome's screencast, and `build.py` assembles it with ffmpeg.
 
 ## Credits and disclosure
 
